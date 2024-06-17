@@ -1,0 +1,57 @@
+server:
+  port: 3000
+  host: 127.0.0.1
+  jwt_secret: yapsecret
+
+redis:
+  host: 127.0.0.1
+  port: 6379
+  user: default
+  password: default
+
+cache:
+  balances_ttl: 60 # seconds
+  # messages_ttl: 60 # seconds
+
+moderation:
+  admins: [address1, address2,...] # usually the DAO Council Multisig
+  moderators: [address1, address2,...] # elected moderators
+  spam_filters: [regex1, regex2,...] # regex patterns to filter spam
+  mute: # warning+muting
+    - after: 3 # number of spam messages before muting
+      duration: 10 # number of seconds to mute
+    - after: 5
+      duration: 30
+    - after: 10
+      duration: 60
+  ban: # banning
+    - after: 10 # number of spam messages before banning
+      duration: 3 # number of days to ban
+    - after: 20
+      duration: 7
+    - after: 30
+      duration: 30
+    - after: 40
+      duration: forever
+  revoke_on_ban: true # revoke all roles on ban
+  post_cooldown: 3600 # min seconds between posts/topic creation
+  post_limit: 10 # max posts/topic creation per day
+  message_cooldown: 10 # number of seconds between messages
+  message_limit: 10 # number of messages per day
+
+governance:
+  admins: [address1, address2,...] # # usually the DAO Council Multisig
+  governors: [address1, address2,...] # elected governors
+  eligibility: # eligibility criteria
+    registry:
+      eth:ETH: 1:0x0000000000000000000000000000000000000001
+      eth:WETH: 1:0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2
+    messaging: # any of the below criteria groups grants posting rights
+      - {token: eth:ETH, balance: 1e15, duration: 1} # minimum token balance or usd_balance duration in days
+      - {token: eth:WETH, balance: 1e15, duration: 1}
+    posting:
+      - {token: eth:ETH, balance: 1e15, duration: 1}
+      - {token: eth:WETH, balance: 1e15, duration: 1}
+    voting:
+      - {token: eth:ETH, balance: 1e15, duration: 1}
+      - {token: eth:WETH, balance: 1e15, duration: 1}
