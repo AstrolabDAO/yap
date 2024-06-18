@@ -4,6 +4,8 @@ import { Contract, JsonRpcProvider } from "ethers";
 import { JsonFragment } from "ethers";
 import { ASTROLAB_CDN, DEFAULT_ABI } from "../../common/constants";
 import { Network } from "../../common/models";
+import config from "./config";
+import { grantRole } from "./io";
 
 const networkById: Map<string|number, Network> = new Map();
 const providerByNetworkId: Map<string|number, JsonRpcProvider> = new Map();
@@ -52,6 +54,7 @@ async function initNetworkProviders() {
         ids.push(n.id);
       }
     }
+    console.log(`Initializing providers for networks: ${ids}...`);
     if (providerByNetworkId.size > 0) {
       return; // Already initialized
     }
@@ -64,6 +67,20 @@ async function initNetworkProviders() {
     console.error("Error fetching network data:", error);
     throw new Error("Failed to initialize network providers");
   }
+}
+
+async function initializeRoles() {
+  console.log(`Initializing roles: ${JSON.stringify(config.moderation)}...`);
+  return Promise.all([
+    config.moderation.admins.forEach((a) => grantRole(a, "adm")),
+    config.moderation.moderators.forEach((m) => grantRole(m, "mod")),
+    config.governance.governors.forEach((g) => grantRole(g, "gov")),
+  ]);
+}
+
+async function initialize() {
+  await initNetworkProviders();
+  await initializeRoles();
 }
 
 export { getContract, getMultiContract, getMultiProvider, getProvider };

@@ -1,6 +1,12 @@
 type VoteValue = 1 | 0 | -1; // For, Abstain, Against
 type Role = "adm" | "gov" | "mod"; // Admin, Governor, Moderator
-type ProposalStatus = "pending" | "active" | "closed" | "paused" | "canceled";
+type Status = "pending" | "active" | "closed" | "paused" | "canceled";
+type MovingAverage =
+  | "simple"
+  | "exponential"
+  | "weighted"
+  | "smoothed"
+  | "linearRegression";
 type VotingPowerScheme =
   | "affine"
   | "linear"
@@ -15,7 +21,7 @@ type ModAction = "mute" | "ban"; // Mute, Ban
 type VoteOutcome = "pending" | "passed" | "failed"; // == proposal accepted / rejected
 
 interface GeneralEligibility {
-  registry: { [xtoken: string]: string }; // Mapping of token identifiers to addresses
+  aliases: { [xtoken: string]: string }; // Mapping of token identifiers (eg. eth:weth) to addresses
   messaging: EligibilityCriteria[]; // Eligibility criteria for messaging
   posting: EligibilityCriteria[]; // Eligibility criteria for posting
   voting: EligibilityCriteria[]; // Eligibility criteria for voting
@@ -98,22 +104,51 @@ interface VoteResults {
   weighted: VoteCount;
 }
 
-interface Proposal {
+interface Snapshot {
+  id: string;
+  airDropId: string;
+  proposalId: string;
+  timestamp: number;
+  balances: { [address: string]: { [xtoken: string]: bigint } };
+  blockNumbers: { [xtoken: string]: number };
+  usdBalances: { [address: string]: number };
+  totalSupply: { [xtoken: string]: bigint };
+  usdTotalSupply: { [xtoken: string]: number };
+}
+
+interface SnapshotConfig {
+  interval: number;
+  randomize: boolean;
+  weightFunction: MovingAverage;
+  startDate: number;
+  endDate: number;
+  xtokens: string[];
+}
+
+interface Snaphshoted {
   id: string;
   topicId: string;
   title: string;
   description: string;
-  author: string;
-  status: ProposalStatus; // if pending, can be accepted or rejected by governors
   startDate: number;
   endDate: number;
+  config: SnapshotConfig;
   eligibility: EligibilityCriteria[];
+  snapshotIds: string[];
+  status: Status; // if pending, can be accepted or rejected by governors
+}
+
+interface AirDrop extends Snaphshoted {}
+
+interface Proposal extends Snaphshoted {
+  author: string;
   votingPowerScheme: string; // "affine", "linear", etc.
-  votes: Vote[];
+  voteIds: string[];
   results: VoteResults;
 }
 
 interface Vote {
+  id: string;
   proposalId: string;
   address: string; // user address
   balances: { [xtoken: string]: bigint };
@@ -139,10 +174,10 @@ interface JwtPayload {
 
 interface User extends JwtPayload {
   ens: string;
-  name: string;
+  name: string; // display name/alias
   picture: string;
   balances: { [xtoken: string]: number };
-  proposals: string[]; // Proposal IDs
+  proposalIds: string[]; // Proposal IDs
   topics: string[]; // Topic IDs
   // messages: { [topicId: string]: { [messageId: string]: Message } }; // not stored on the in-memory user object to save memory
 }
@@ -157,7 +192,7 @@ interface Network {
 export {
   VoteValue,
   Role,
-  ProposalStatus,
+  Status,
   VotingPowerScheme,
   ModRule,
   ModAction,
@@ -173,5 +208,8 @@ export {
   Network,
   Vote,
   VoteCount,
-  VoteResults
+  VoteResults,
+  Snapshot,
+  SnapshotConfig,
+  AirDrop,
 };

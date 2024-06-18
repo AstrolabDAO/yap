@@ -54,7 +54,7 @@ async function getEligibility(
 }
 
 // TODO: implement topic/proposal specific eligibility checks
-async function canMessage(user: User, topicId: string): Promise<boolean> {
+async function canMessage(user: User, topicId?: string): Promise<boolean> {
   return (
     await getEligibility(user, config.governance.eligibility.messaging)
   )[0];
@@ -68,19 +68,15 @@ async function canVote(user: User, proposalId: string): Promise<boolean> {
   return (await getEligibility(user, config.governance.eligibility.voting))[0];
 }
 
-function canModerate(user: User): boolean {
+async function canModerate(user: User): Promise<boolean> {
   return (
     config.moderation.admins.includes(user.address) ||
     config.moderation.moderators.includes(user.address)
   );
 }
 
-async function initializeRoles() {
-  return Promise.all([
-    config.moderation.admins.forEach((a) => grantRole(a, "adm")),
-    config.moderation.moderators.forEach((m) => grantRole(m, "mod")),
-    config.governance.governors.forEach((g) => grantRole(g, "gov")),
-  ]);
+async function isSpam(content: string): Promise<boolean> {
+  return config.moderation.spam_filters.some((f) => new RegExp(f).test(content));
 }
 
 export {

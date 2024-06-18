@@ -1,7 +1,7 @@
 import { ethers } from "ethers";
 
 import { JwtPayload, User, Vote, VoteResults } from "../../common/models";
-import { getVotingPower } from "../../common/voting-schemes";
+import { getVotingPower } from "../../common/maths/voting-schemes";
 import config from "./config";
 import { getProposal, getProposalVotes, hasUserVoted, pushProposal, pushVote } from "./io";
 import { getEligibility } from "./security";

@@ -1,13 +1,15 @@
-import { Router } from "express";
+import { Request, Response, Router } from "express";
 import { Topic, User } from "../../../common/models";
 import { getTopic, pushTopic } from "../io";
 import { useAuth } from "../middlewares/auth";
 import { editMessage } from "../post";
+import { getFrom } from "../utils";
+import { canMessage, canPostProposal } from "../security";
 
 const router = Router();
 
 // POST /topic (Create Topic)
-router.post("/topic", useAuth, async (req, res) => {
+router.post("/topic", useAuth, async (req: Request, res: Response) => {
   try {
     const { title, description } = req.body; // Assuming title and description in request body
     const user = req["user"] as User;
@@ -37,25 +39,22 @@ router.post("/topic", useAuth, async (req, res) => {
 });
 
 // PUT /topic/:topicId (Edit Topic)
-router.put("/topic/:topicId", useAuth, async (req, res) => {
+router.put("/topic/:topicId", useAuth, async (req: Request, res: Response) => {
   try {
-    const topicId = req.params.topicId;
-    const { title, description } = req.body;
-    const user = req["user"] as User;
+    const [topicId, user] = [req.params.topicId, getFrom<User>(req, "user")];
 
-    // Check if topic exists
-    await getTopic(topicId);
+    const t = await getTopic(topicId);
+    const updateable = ["title", "description", "content"];
+    const values = updateable.map(key => req.body[key]);
 
-    // Input validation
-    if (!title || !description) {
-      return res
-        .status(400)
-        .json({ error: "Title and description are required." });
+    if (t.author !== user.address || !(await canMessage(user))) {
+      return res.status(403).json({ error: "User is not eligible to edit this topic." });
     }
 
-    // Push updated topic to the data store or publish an event
-    // ... your implementation here ...
-
+    if (!values.some(v => v)) {
+      return res.status(400).json({ error: "Nothing to update." });
+    }
+    await pushTopic({ ...t, ...values });
     res.status(200).json({ message: "Topic updated successfully." });
   } catch (error) {
     console.error("Error updating topic:", error);
@@ -64,12 +63,9 @@ router.put("/topic/:topicId", useAuth, async (req, res) => {
 });
 
 // POST /topic/:topicId/message (Post Message)
-router.post("/topic/:topicId/message", useAuth, async (req, res) => {
+router.post("/topic/:topicId/message", useAuth, async (req: Request, res: Response) => {
   try {
-    const topicId = req.params.topicId;
-    const user = req["user"] as User;
-    const content = req.body.content;
-
+    const [topicId, content, user] = [req.params.topicId, req.body.content, getFrom<User>(req, "user")];
     await postMessage(user, topicId, content);
     res.status(201).json({ message: "Message posted successfully." });
   } catch (error) {
@@ -79,12 +75,9 @@ router.post("/topic/:topicId/message", useAuth, async (req, res) => {
 });
 
 // PUT /message/:messageId (Edit Message)
-router.put("/message/:messageId", useAuth, async (req, res) => {
+router.put("/message/:messageId", useAuth, async (req: Request, res: Response) => {
   try {
-    const messageId = req.params.messageId;
-    const user = req["user"] as User;
-    const content = req.body.content;
-
+    const [messageId, content, user] = [req.params.messageId, req.body.content, getFrom<User>(req, "user")];
     await editMessage(user, messageId, content);
     res.status(200).json({ message: "Message updated successfully." });
   } catch (error) {

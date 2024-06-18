@@ -44,22 +44,31 @@ governance:
   admins: [address1, address2,...] # # usually the DAO Council Multisig
   governors: [address1, address2,...] # elected governors
   eligibility: # eligibility criteria
-    registry:
-      eth:ETH: 1:0x0000000000000000000000000000000000000001
-      eth:WETH: 1:0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2
+    aliases:
+      eth:eth: 1:0x0000000000000000000000000000000000000001 # address(1) == native token alias
+      eth:weth: 1:0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2
+      arb:eth: 1:0x0000000000000000000000000000000000000001
+      arb:weth: 1:0x82af49447d8a07e3bd95bd0d56f35241523fbab1
+      op:eth: 1:0x0000000000000000000000000000000000000001
+      op:weth: 1:0x4200000000000000000000000000000000000006
+      base:eth: 1:0x0000000000000000000000000000000000000001
+      base:weth: 1:0x4200000000000000000000000000000000000006
+      poly:eth: 1:0x0000000000000000000000000000000000000001
+      poly:weth: 1:0xe50fa9b3c56ffb159cb0fca61f5c9d750e8128c8
     messaging: # any of the below criteria groups grants posting rights
-      - {xtoken: eth:ETH, balance: 1e15, duration: 1} # minimum token balance or usd_balance duration in days
-      - {xtoken: eth:WETH, balance: 1e15, duration: 1}
+      - {xtoken: eth:eth, balance: 1e15, usd_balance: 1, duration: 1}
+      - {xtoken: eth:weth, balance: 1e15, usd_balance: 1, duration: 1}
     posting:
-      - {xtoken: eth:ETH, balance: 1e15, duration: 1}
-      - {xtoken: eth:WETH, balance: 1e15, duration: 1}
+      - {xtoken: eth:eth, balance: 1e15, usd_balance: 1, duration: 1}
+      - {xtoken: eth:weth, balance: 1e15, usd_balance: 1, duration: 1}
     voting:
-      - {xtoken: eth:ETH, balance: 1e15, duration: 1}
-      - {xtoken: eth:WETH, balance: 1e15, duration: 1}
+      - {xtoken: eth:eth, balance: 1e15, usd_balance: 1, duration: 1}
+      - {xtoken: eth:weth, balance: 1e15, usd_balance: 1, duration: 1}
+    # airdrop: # defined at runtime
   delegation:
     enabled: true
     minimums:
-      eth:ETH: 1e15
-      eth:WETH: 1e15
+      eth:eth: 1e15
+      eth:weth: 1e15
     haircut: 0.1 # 10% haircut on delegated votes
     default_validity: 1 # default validity in days

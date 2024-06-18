@@ -1,7 +1,9 @@
 import { Call as MultiCall } from "ethcall";
+import { Request, Response } from "express";
 
 import { getBalances as getCachedBalances, getRedis, setBalance, setBalances } from "./io";
 import { getContract, getMultiContract, getMultiProvider } from "./state";
+import { User } from "../../common/models";
 
 async function getBalance(address: string, xtoken: string): Promise<string> {
   const r = await getRedis();
@@ -52,5 +54,12 @@ async function getBalances(address: string, xtokens: string[]): Promise<bigint[]
   return balances;
 }
 
-export { getBalance, getBalances };
+function getFrom<T>(from: any, what: string): T {
+  const o = (<any>from)[what];
+  if (!o) {
+    throw new Error(`Missing ${what} in object: ${JSON.stringify(from)}`);
+  }
+  return o as T;
+}
 
+export { getBalance, getBalances, getFrom };
