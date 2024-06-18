@@ -48,7 +48,7 @@ async function getEligibility(
   const balances = await getBalances(user.address, relevantXTokens);
   const eligible = criteria.some(
     (crit) =>
-      balances[relevantXTokens.indexOf(crit.xtoken)] > BigInt(crit.balance)
+      balances[relevantXTokens.indexOf(crit.xtoken)] > BigInt(crit.min_balance)
   );
   return [eligible, balances];
 }

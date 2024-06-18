@@ -56,14 +56,14 @@ governance:
       poly:eth: 1:0x0000000000000000000000000000000000000001
       poly:weth: 1:0xe50fa9b3c56ffb159cb0fca61f5c9d750e8128c8
     messaging: # any of the below criteria groups grants posting rights
-      - {xtoken: eth:eth, balance: 1e15, usd_balance: 1, duration: 1}
-      - {xtoken: eth:weth, balance: 1e15, usd_balance: 1, duration: 1}
+      - {xtoken: eth:eth, min_balance: 1e15, usd_balance: 1, min_duration: 1}
+      - {xtoken: eth:weth, min_balance: 1e15, usd_balance: 1, min_duration: 1}
     posting:
-      - {xtoken: eth:eth, balance: 1e15, usd_balance: 1, duration: 1}
-      - {xtoken: eth:weth, balance: 1e15, usd_balance: 1, duration: 1}
+      - {xtoken: eth:eth, min_balance: 1e15, usd_balance: 1, min_duration: 1}
+      - {xtoken: eth:weth, min_balance: 1e15, usd_balance: 1, min_duration: 1}
     voting:
-      - {xtoken: eth:eth, balance: 1e15, usd_balance: 1, duration: 1}
-      - {xtoken: eth:weth, balance: 1e15, usd_balance: 1, duration: 1}
+      - {xtoken: eth:eth, min_balance: 1e15, usd_balance: 1, min_duration: 1}
+      - {xtoken: eth:weth, min_balance: 1e15, usd_balance: 1, min_duration: 1}
     # airdrop: # defined at runtime
   delegation:
     enabled: true

@@ -29,8 +29,10 @@ interface GeneralEligibility {
 
 interface EligibilityCriteria {
   xtoken: string; // Token identifier
-  balance: number; // Minimum token balance
-  duration: number; // Minimum duration in days
+  min_balance: number; // Minimum token balance
+  min_duration: number; // Minimum duration in days
+  balance_multiplier: number; // Balance factor
+  duration_multiplier: number; // Duration factor
 }
 
 interface ModRule {
