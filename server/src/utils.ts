@@ -1,52 +1,17 @@
-import { ethers } from "ethers";
-import config from "./config";
-import { User } from "../../common/models";
-import { getContract, getRedis } from "./state";
-import { getMultiProvider } from "./state.js";
+import { Call as MultiCall } from "ethcall";
 
-/**
- * Generates a message to be signed by the user for a vote.
- * @param proposalId - The ID of the proposal being voted on.
- * @param vote - The vote value (1 for "for", -1 for "against", 0 for "abstain").
- * @param user - The user object containing balances and address.
- * @returns The message string to be signed.
- */
-function generateVoteMessage(proposalId: string, vote: number, user: User): string {
-  const relevantBalances = {}; // Extract balances relevant to voting eligibility
-  for (const group of config.governance.eligibility.voting) {
-    relevantBalances[group.token] = user.balances[group.token] || 0;
-  }
-  const message = JSON.stringify({
-    proposalId,
-    vote,
-    balances: relevantBalances,
-    timestamp: Date.now(), // To prevent replay attacks
-  });
-  return message;
-}
-
-/**
- * Verifies a signed vote message.
- * @param message - The original message that was signed.
- * @param signature - The signature provided by the user.
- * @returns The address of the signer if the signature is valid, null otherwise.
- */
-function verifyVoteSignature(message: string, signature: string): string | null {
-  try {
-    const sig = ethers.Signature.from(signature); // r,s,v...
-    return ethers.recoverAddress(ethers.hashMessage(message), sig);
-  } catch (error) {
-    console.error("Error verifying signature:", error);
-    return null; // Invalid signature
-  }
-}
+import { getBalances as getCachedBalances, getRedis, setBalance, setBalances } from "./io";
+import { getContract, getMultiContract, getMultiProvider } from "./state";
 
 async function getBalance(address: string, xtoken: string): Promise<string> {
   const r = await getRedis();
-  let balance = await r.get(`balance:${address}:${xtoken}`);
+  let balance: any = await r.get(`balance:${address}:${xtoken}`);
   if (!balance) {
     balance = await (await getContract(xtoken)).balanceOf(address);
-    await r.setex(`balance:${address}:${xtoken}`, config.cache.balances_ttl, balance);
+    if (!balance) {
+      throw new Error(`Failed to get balance for ${address}:${xtoken}`);
+    }
+    await setBalance(address, xtoken, <bigint>balance);
   }
   return balance;
 }
@@ -54,9 +19,9 @@ async function getBalance(address: string, xtoken: string): Promise<string> {
 async function getBalances(address: string, xtokens: string[]): Promise<bigint[]>{
   const r = await getRedis();
   const keys = xtokens.map((token) => `balance:${address}:${token}`);
-  let balances = (await r.mget(keys)).map((balance) => BigInt(balance));
+  let balances = await getCachedBalances(address, xtokens);
   const balanceByToken: { [token: string]: bigint } = {};
-  const callsByChainId: { [chainId: string]: Promise<any>[] } = {};
+  const callsByChainId: { [chainId: string]: MultiCall[] } = {};
   const tokensByChainId: { [chainId: string]: string[] } = {};
 
   for (let i = 0; i < xtokens.length; i++) {
@@ -66,7 +31,7 @@ async function getBalances(address: string, xtokens: string[]): Promise<bigint[]
         callsByChainId[chainId] = [];
         tokensByChainId[chainId] = [];
       }
-      const contract = await getContract(xtokens[i]);
+      const contract = await getMultiContract(xtokens[i]);
       callsByChainId[chainId].push(contract.balanceOf(address));
       tokensByChainId[chainId].push(xtokens[i]);
     } else {
@@ -78,13 +43,14 @@ async function getBalances(address: string, xtokens: string[]): Promise<bigint[]
     const provider = await getMultiProvider(chainId);
     const results = await provider.all(calls);
     results.forEach((result, index) => {
-      balanceByToken[tokensByChainId[chainId][index]] = BigInt(result);
+      balanceByToken[tokensByChainId[chainId][index]] = BigInt(result as string);
     });
   }));
 
   balances = xtokens.map((token) => balanceByToken[token]);
-  await r.mset(...keys.flatMap((key, i) => [key, balances[i].toString()]));
+  await setBalances(address, balanceByToken);
   return balances;
 }
 
-export { generateVoteMessage, verifyVoteSignature, getBalance, getBalances };
+export { getBalance, getBalances };
+

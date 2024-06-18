@@ -1,5 +1,16 @@
+.vscode
+.idea
 .DS_Store
 node_modules
 dist
 coverage
 *.lock
+.env
+.env.*
+*.log
+*.log.*
+*.pid
+*.pid.*
+*.swp
+*.swo
+*.swn

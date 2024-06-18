@@ -4,7 +4,7 @@ import express from "express";
 import cors from "cors";
 import expressWs from "express-ws";
 import config from "./src/config";
-import voteRoutes from "./src/routes";
+import routes from "./src/routers/vote";
 
 const app = express();
 expressWs(app);
@@ -12,12 +12,9 @@ expressWs(app);
 // Apply middleware
 app.use(cors());
 app.use(express.json());
-// ... any additional middleware (e.g., authentication)
+app.use("/votes", routes);
 
-// Mount the vote routes
-app.use("/votes", voteRoutes);
-
-const port = config.port || 3000;
+const port = config.server.port || 3000;
 app.listen(port, () => {
   console.log(`Server listening on port ${port}`);
 });

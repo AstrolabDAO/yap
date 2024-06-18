@@ -13,7 +13,7 @@ function affine(balance: number): number {
  * @param coefficient - The proportionality coefficient (weight per token)
  * @returns The calculated voting weight
  */
-function linear(balance: number, coefficient=1): number {
+function linear(balance: number, coefficient = 1): number {
   if (coefficient <= 0) throw new Error("Coefficient must be positive"); // Ensure valid coefficient
   return coefficient * balance; // Voting power scales linearly with balance
 }
@@ -25,10 +25,7 @@ function linear(balance: number, coefficient=1): number {
  * @returns The calculated voting weight
  * @throws Error if the factor is not positive
  */
-function geometric(
-  balance: number,
-  factor: number = 0.99998
-): number {
+function geometric(balance: number, factor: number = 0.99998): number {
   if (factor <= 0) throw new Error("Factor must be positive"); // Ensure valid factor
   return (1 - Math.pow(factor, balance + 1)) / (1 - factor); // Sum of geometric series
 }
@@ -218,7 +215,7 @@ function sigmoid(
   return cubicSpline(balance, points);
 }
 
-const votingPowerSchemes = {
+const votingPowerSchemes: Record<string, (balance: number, ...args: any[]) => number> = {
   affine,
   linear,
   geometric,
@@ -241,3 +238,5 @@ function getVotingPowerScheme(name: string) {
 function getVotingPower(name: string, balance: number) {
   return getVotingPowerScheme(name)?.(balance);
 }
+
+export { getVotingPowerScheme, getVotingPower };

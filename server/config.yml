@@ -6,12 +6,13 @@ server:
 redis:
   host: 127.0.0.1
   port: 6379
-  user: default
+  username: default
   password: default
 
 cache:
   balances_ttl: 60 # seconds
-  # messages_ttl: 60 # seconds
+  trollbox_ttl: 3600 # auto-flush
+  ens_ttl: 3600 # before new ens resolution
 
 moderation:
   admins: [address1, address2,...] # usually the DAO Council Multisig
@@ -47,11 +48,18 @@ governance:
       eth:ETH: 1:0x0000000000000000000000000000000000000001
       eth:WETH: 1:0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2
     messaging: # any of the below criteria groups grants posting rights
-      - {token: eth:ETH, balance: 1e15, duration: 1} # minimum token balance or usd_balance duration in days
-      - {token: eth:WETH, balance: 1e15, duration: 1}
+      - {xtoken: eth:ETH, balance: 1e15, duration: 1} # minimum token balance or usd_balance duration in days
+      - {xtoken: eth:WETH, balance: 1e15, duration: 1}
     posting:
-      - {token: eth:ETH, balance: 1e15, duration: 1}
-      - {token: eth:WETH, balance: 1e15, duration: 1}
+      - {xtoken: eth:ETH, balance: 1e15, duration: 1}
+      - {xtoken: eth:WETH, balance: 1e15, duration: 1}
     voting:
-      - {token: eth:ETH, balance: 1e15, duration: 1}
-      - {token: eth:WETH, balance: 1e15, duration: 1}
+      - {xtoken: eth:ETH, balance: 1e15, duration: 1}
+      - {xtoken: eth:WETH, balance: 1e15, duration: 1}
+  delegation:
+    enabled: true
+    minimums:
+      eth:ETH: 1e15
+      eth:WETH: 1e15
+    haircut: 0.1 # 10% haircut on delegated votes
+    default_validity: 1 # default validity in days
