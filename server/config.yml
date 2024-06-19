@@ -1,5 +1,5 @@
 server:
-  port: 3000
+  port: 40042
   host: 127.0.0.1
   jwt_session_salt: yapsession
   jwt_refresh_salt: yaprefresh
@@ -16,9 +16,13 @@ cache:
   ens_ttl: 3600 # before new ens resolution
 
 moderation:
-  admins: [address1, address2,...] # usually the DAO Council Multisig
-  moderators: [address1, address2,...] # elected moderators
-  spam_filters: [regex1, regex2,...] # regex patterns to filter spam
+  admins: ["0x026E222AC6aD0BA8AD04efd7BCf6025e40457345"] # usually the DAO Council Multisig
+  moderators: ["0x026E222AC6aD0BA8AD04efd7BCf6025e40457345"] # elected moderators
+  spam_filters:
+    - /(sh[i1*]t|fu[c*k]+|b[i1*]tch|wh[o0]r[e3]|bast[a@4]rd|m[o0]r[o0]n|[a@4]ssh[0o]le|d[i1*]ck|pr[i1*]ck|d[i1*]ckhead|scumb[a@4]g|c[u*]nt)/i # profanity
+    - /(n[i1*]gg?[e3]r|f[a@4]gg?[o0*]t|k[i1]k[e3]|c[h]?[i1*]nk|sp[i1*]c|w[o0*]p|d[a@4]g[o0*])/i # racial slurs
+    - /(go to hell|kill yourself|you suck)/i # offensive sentencing
+
   mute: # warning+muting
     - after: 3 # number of spam messages before muting
       duration: s10 # number of seconds to mute
@@ -43,20 +47,19 @@ moderation:
   message_limit: 10 # number of messages per day
 
 governance:
-  admins: [address1, address2,...] # # usually the DAO Council Multisig
-  governors: [address1, address2,...] # elected governors
+  governors: ["0x026E222AC6aD0BA8AD04efd7BCf6025e40457345"] # elected governors
   eligibility: # eligibility criteria
     aliases:
       eth:eth: 1:0x0000000000000000000000000000000000000001 # address(1) == native token alias
       eth:weth: 1:0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2
-      arb:eth: 1:0x0000000000000000000000000000000000000001
-      arb:weth: 1:0x82af49447d8a07e3bd95bd0d56f35241523fbab1
-      op:eth: 1:0x0000000000000000000000000000000000000001
-      op:weth: 1:0x4200000000000000000000000000000000000006
-      base:eth: 1:0x0000000000000000000000000000000000000001
-      base:weth: 1:0x4200000000000000000000000000000000000006
-      poly:eth: 1:0x0000000000000000000000000000000000000001
-      poly:weth: 1:0xe50fa9b3c56ffb159cb0fca61f5c9d750e8128c8
+      arb:eth: 42161:0x0000000000000000000000000000000000000001
+      arb:weth: 42161:0x82af49447d8a07e3bd95bd0d56f35241523fbab1
+      op:eth: 10:0x0000000000000000000000000000000000000001
+      op:weth: 10:0x4200000000000000000000000000000000000006
+      base:eth: 8453:0x0000000000000000000000000000000000000001
+      base:weth: 8453:0x4200000000000000000000000000000000000006
+      poly:eth: 137:0x0000000000000000000000000000000000000001
+      poly:weth: 137:0xe50fa9b3c56ffb159cb0fca61f5c9d750e8128c8
     messaging: # any of the below criteria groups grants posting rights
       - {xtoken: eth:eth, min_balance: 1e15, usd_balance: 1, min_duration: 1}
       - {xtoken: eth:weth, min_balance: 1e15, usd_balance: 1, min_duration: 1}

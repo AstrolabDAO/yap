@@ -1,9 +1,20 @@
 import { Call as MultiCall } from "ethcall";
 
-import { getBalances as getCachedBalances, getRedis, setBalance, setBalances } from "./io";
-import { getContract, getMultiContract, getMultiProvider, getProvider } from "./state";
-import { Interval, User } from "../../common/models";
+import {
+  getBalances as getCachedBalances,
+  getRedis,
+  setBalance,
+  setBalances,
+} from "./io";
+import {
+  getContract,
+  getMultiContract,
+  getMultiProvider,
+  getProvider,
+} from "./state";
+import { EligibilityCriteria, Interval, Schema, User, ValidationOption } from "../../common/models";
 import { NATIVE_ALIAS } from "../../common/constants";
+import config from "./config";
 
 async function getBalance(address: string, xtoken: string): Promise<string> {
   const r = await getRedis();
@@ -18,7 +29,10 @@ async function getBalance(address: string, xtoken: string): Promise<string> {
   return balance;
 }
 
-async function getBalances(address: string, xtokens: string[]): Promise<bigint[]>{
+async function getBalances(
+  address: string,
+  xtokens: string[]
+): Promise<bigint[]> {
   let balances = await getCachedBalances(address, xtokens);
   const balanceByToken: { [token: string]: bigint } = {};
   const callsByChainId: { [chainId: string]: MultiCall[] } = {};
@@ -29,9 +43,11 @@ async function getBalances(address: string, xtokens: string[]): Promise<bigint[]
     if (!balances[i]) {
       const [chainId, token] = xtokens[i].split(":");
       if (token == NATIVE_ALIAS) {
-        extraneousPromises.push(getProvider(chainId)
-          .then(p => p.getBalance(address))
-            .then(b => balanceByToken[xtokens[i]] = BigInt(b)));
+        extraneousPromises.push(
+          getProvider(chainId)
+            .then((p) => p.getBalance(address))
+            .then((b) => (balanceByToken[xtokens[i]] = BigInt(b)))
+        );
         continue;
       }
       if (!callsByChainId[chainId]) {
@@ -51,10 +67,12 @@ async function getBalances(address: string, xtokens: string[]): Promise<bigint[]
       const provider = await getMultiProvider(chainId);
       const results = await provider.all(calls);
       results.forEach((result, index) => {
-        balanceByToken[tokensByChainId[chainId][index]] = BigInt(result as string);
+        balanceByToken[tokensByChainId[chainId][index]] = BigInt(
+          result as string
+        );
       });
     }),
-    ...extraneousPromises
+    ...extraneousPromises,
   ]);
 
   balances = xtokens.map((token) => balanceByToken[token]);
@@ -74,7 +92,7 @@ function unique<T>(arr: T[]): T[] {
   return [...new Set(arr)];
 }
 
-function toSec(interval: number|Interval): number {
+function toSec(interval: number | Interval): number {
   if (typeof interval === "number") {
     return interval;
   }
@@ -87,33 +105,71 @@ function toSec(interval: number|Interval): number {
   }
   const value = parseInt(match[1]);
   switch (match[2]) {
-    case "s":
-      return value;
-    case "m":
-      return value * 60;
-    case "h":
-      return value * 3600;
-    case "D":
-      return value * 86400;
-    case "W":
-      return value * 604800;
-    case "M":
-      return value * 2592000;
-    case "Y":
-      return value * 31536000;
-    default:
-      return value;
+    case "s": return value;
+    case "m": return value * 60;
+    case "h": return value * 3600;
+    case "D": return value * 86400;
+    case "W": return value * 604800;
+    case "M": return value * 2592000;
+    case "Y": return value * 31536000;
+    default: return value;
   }
 }
 
-function toMs(interval: number|Interval): number {
+function toMs(interval: number | Interval): number {
   return toSec(interval) * 1000;
 }
 
-function clonePartial(obj: any, exclude: string[]): any {
+function clonePartial(obj: any, { exclude = [], include = [] }: { exclude?: string[], include?: string[] }): any {
   const clone = { ...obj };
-  exclude.forEach((key) => delete clone[key]);
+  if (include.length) {
+    Object.keys(clone).forEach(key => !include.includes(key) && delete clone[key]);
+  }
+  if (exclude.length) {
+    exclude.forEach(key => delete clone[key]);
+  }
   return clone;
 }
 
-export { getBalance, getBalances, getFrom, unique, toSec, toMs, clonePartial };
+function validate(
+  o: any,
+  schema: Schema,
+  options: ValidationOption={}
+): boolean {
+
+  options = { allowPartial: false, allowExtend: false, ...(options) };
+  const getType = (value: any) =>
+    value === null ? "null" : Array.isArray(value) ? "array" : typeof value;
+
+  if (typeof schema === "string") return getType(o) === schema;
+  if (Array.isArray(schema))
+    return (
+      Array.isArray(o) && o.every((item) => validate(item, schema[0], options))
+    );
+
+  const formatKeys = Object.keys(schema);
+  const objectKeys = Object.keys(o);
+
+  if (!options.allowPartial && formatKeys.some((key) => !(key in o))) {
+    return false; // Missing required keys in non-partial mode
+  }
+
+  if (!options.allowExtend && objectKeys.some((key) => !(key in schema))) {
+    return false; // Extra keys in non-extend mode
+  }
+
+  return formatKeys.every(
+    (key) => key in o && validate(o[key], schema[key], options)
+  );
+}
+
+export {
+  getBalance,
+  getBalances,
+  getFrom,
+  unique,
+  toSec,
+  toMs,
+  clonePartial,
+  validate,
+};

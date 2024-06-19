@@ -84,10 +84,14 @@ async function castVote(proposalId: string, user: User|JwtPayload, value: 1|0|-1
   }
 }
 
-async function tallyResults(proposalId: string) {
-  const proposal = await getProposal(proposalId);
-  const votes = await getProposalVotes(proposalId);
-
+async function tallyResults(proposalId: string): Promise<VoteResults> {
+  const [proposal, votes] = await Promise.all([getProposal(proposalId), getProposalVotes(proposalId)]);
+  if (!proposal) {
+    throw new Error("Proposal not found.");
+  }
+  if (!votes?.length || proposal.status === "closed") {
+    return proposal.results;
+  }
   const results = votes.reduce((acc, vote) => {
     const isFor = vote.value === 1;
     const isAgainst = vote.value === -1;
@@ -116,16 +120,7 @@ async function tallyResults(proposalId: string) {
   }
 
   await pushProposal({ ...proposal, results });
+  return results;
 }
 
-// async function pauseVote(proposalId: string) {
-// }
-
-// async function cancelVote(proposalId: string) {
-// }
-
-// async function closeVote(proposalId: string) {
-// }
-
 export { castVote, generateVoteMessage, tallyResults };
-

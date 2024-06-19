@@ -3,7 +3,7 @@ import { verifyAndRefreshJwt } from "../security";
 
 import { User } from "../../../common/models";
 import config from "../config";
-import { isAdmin, isGovernor, isModerator } from "../io";
+import { getUser, isAdmin, isGovernor, isModerator } from "../io";
 
 const isAdm = async (req: Request, res: Response, next: any) => {
   const user = res.locals.currentUser as User;
@@ -29,14 +29,17 @@ const isGov = async (req: Request, res: Response, next: any) => {
   next();
 }
 
-const useAuth = (req: Request, res: Response, next: NextFunction) => {
+const useAuth = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const prevJwt = req.headers.authorization!;
     const [jwt, payload] = verifyAndRefreshJwt(req.headers.authorization!, config.server.jwt_session_salt);
-    if (jwt !== prevJwt) {
-      res.setHeader("Authorization", `Bearer ${jwt}`);
+    if (!res.locals.currentUser) {
+      // res.locals.currentUser = payload;
+      res.locals.currentUser = await getUser(payload.address); // stateless => get user from jwt everytime
     }
-    res.locals = { ...res.locals, currentUser: payload };
+    if (jwt !== req.headers.authorization) {
+      res.setHeader("Authorization", `Bearer ${jwt}`);
+      console.log(`Refreshed JWT for ${payload.address}`);
+    }
     next();
   } catch (error) {
     console.error("Error in authentication:", error);

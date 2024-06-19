@@ -21,6 +21,12 @@ type VotingPowerScheme =
 type ModAction = "mute" | "ban"; // Mute, Ban
 type VoteOutcome = "pending" | "passed" | "failed"; // == proposal accepted / rejected
 type WsMethod = "subscribe" | "unsubscribe" | "create" | "update" | "delete";
+type Theme = "light" | "dark" | "astrolab" | "radyal";
+type Currency = "usd" | "eur" | "eth" | "btc";
+type Locale = "en" | "es" | "fr" | "de" | "it" | "ja" | "ko" | "pt" | "ru" | "zh";
+type PrimitiveType = 'string' | 'number' | 'boolean' | 'null' | 'array';
+type Schema = PrimitiveType | { [key: string]: Schema } | Schema[];
+type ValidationOption = { allowPartial?: boolean, allowExtend?: boolean };
 type EligibilityCriteria = EligibilityCriterion[];
 interface GeneralEligibility {
   aliases: { [xtoken: string]: string }; // Mapping of token identifiers (eg. eth:weth) to addresses
@@ -180,19 +186,40 @@ interface JwtPayload {
 }
 
 interface UserModeration {
+  // spamCount is separate from moderation actions (retrieve with getUserSpamCount())
   muted: { since: number; until: number; by: string; count: number};
   banned: { since: number; until: number; by: string; count: number }
+}
+
+interface UserSettings {
+  theme: Theme;
+  locale: Locale;
+  currency: Currency;
+  notifications: {
+    reputation: boolean,
+    proposals: boolean,
+    messages: boolean,
+    replies: boolean,
+    topics: boolean,
+    votes: boolean,
+  };
+  sessionRefresh: boolean; // jwt autorefresh
 }
 
 interface User extends JwtPayload {
   ens: string;
   name: string; // display name/alias
   picture: string;
-  balances: { [xtoken: string]: number };
-  proposalIds: string[]; // Proposal IDs
-  topics: string[]; // Topic IDs
+  title: string;
   joined: number; // Timestamp
+  topicIds: string[]; // Topic IDs
+  proposalIds: string[]; // Proposal IDs
+  voteIds: string[]; // Vote IDs
+  badges: string[];
+  reputation: number;
   moderation: UserModeration;
+  settings: UserSettings;
+  balances?: { [xtoken: string]: number };
 }
 
 interface Network {
@@ -203,6 +230,12 @@ interface Network {
 }
 
 export {
+  Schema,
+  ValidationOption,
+  Locale,
+  Currency,
+  Theme,
+  MovingAverage,
   WsMethod,
   Interval,
   Authored,

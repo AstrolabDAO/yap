@@ -46,6 +46,7 @@ const getByKey = async <T>(key: string, type: string) => redisGet(key).then(raw 
 const getByKeys = async <T>(keys: string[], type: string) => (await redisMget(keys)).map(raw => parseJSON<T>(raw, type));
 const getAllByPattern = async <T>(pattern: string, type: string) => redisKeys(pattern).then(keys => getByKeys<T>(keys, type)); // redisScanStream(pattern).then(keys => getByKeys<T>(keys, type));
 const setByKey = async <T>(key: string, data: T) => redisSet(key, JSON.stringify(data));
+const setExByKey = async <T>(key: string, data: T, expiry: number) => redisSetEx(key, JSON.stringify(data), expiry);
 const setByKeys = async <T>(pairs: [string, T][]) => redisMset(pairs.map(([k, v]) => [k, JSON.stringify(v)]));
 const pushToList = async <T>(key: string, data: T) => redisRpush(key, JSON.stringify(data));
 const removeFromList = async (key: string, value: string) => (await getRedis()).lrem(key, 0, value);
@@ -105,6 +106,8 @@ const getAllSnapShots = () => getAllByPattern<Snapshot>("snapshot:*", "Snapshot"
 
 const getTopic = (id: string) => getByKey<Topic>(`topic:${id}`, "Topic");
 const getTopics = (ids: string[]) => getByKeys<Topic>(ids.map(id => `topic:${id}`), "Topic");
+const getUserTopicIds = (address: string) => getUser(address).then(user => user.topicIds);
+const getUserTopics = (address: string) => getUserTopicIds(address).then(getTopics);
 const getAllTopics = () => getAllByPattern<Topic>("topic:*", "Topic");
 const pushTopic = (topic: Topic) => setByKey(`topic:${topic.id}`, topic);
 const removeTopic = (id: string) => flush(`topic:${id}`);
@@ -145,12 +148,28 @@ const getTopicMessages = (topicId: string) => getList<Message>(`topic-messages:$
     // combine upvotes and downvotes with messages
     return messages.map((message, i) => ({ ...message, upvotes: res[i * 2], downvotes: res[i * 2 + 1] }));
   });
+const getTopicUserAddresses = (topicId: string) => getTopicMessages(topicId).then(messages => messages.map(m => m.author));
+const getTopicUsers = (topicId: string) => getTopicUserAddresses(topicId).then(addresses => getUsers(addresses));
+const decreaseUserReputation = (address: string, amount: number) => getUser(address).then(user => pushUser({ ...user, reputation: user.reputation - amount }));
+const increaseUserReputation = (address: string, amount: number) => getUser(address).then(user => pushUser({ ...user, reputation: user.reputation + amount }));
 const getMessageUpvotes = (messageId: string) => getSet<string>(`message-upvotes:${messageId}`);
 const getMessageDownvotes = (messageId: string) => getSet<string>(`message-downvotes:${messageId}`);
-const pushMessageUpvote = (messageId: string, address: string) => addToSet(`message-upvotes:${messageId}`, address);
-const pushMessageDownvote = (messageId: string, address: string) => addToSet(`message-downvotes:${messageId}`, address);
-const removeMessageUpvote = (messageId: string, address: string) => removeFromSet(`message-upvotes:${messageId}`, address);
-const removeMessageDownvote = (messageId: string, address: string) => removeFromSet(`message-downvotes:${messageId}`, address);
+const pushMessageUpvote = (messageId: string, address: string) => Promise.all([
+  addToSet(`message-upvotes:${messageId}`, address),
+  increaseUserReputation(address, 1)
+]);
+const pushMessageDownvote = (messageId: string, address: string) => Promise.all([
+  addToSet(`message-downvotes:${messageId}`, address),
+  decreaseUserReputation(address, 1)
+]);
+const removeMessageUpvote = (messageId: string, address: string) => Promise.all([
+  removeFromSet(`message-upvotes:${messageId}`, address),
+  decreaseUserReputation(address, 1)
+]);
+const removeMessageDownvote = (messageId: string, address: string) => Promise.all([
+  removeFromSet(`message-downvotes:${messageId}`, address),
+  increaseUserReputation(address, 1)
+]);
 
 const getSpamFilters = () => getSet<string>("spam:filters");
 const isSpam = (...contents: string[]) => getSpamFilters()
@@ -176,7 +195,8 @@ const pushAirDrop = (airDrop: AirDrop) => setByKey(`airdrop:${airDrop.id}`, airD
 const getProposal = (id: string) => getByKey<Proposal>(`proposal:${id}`, "Proposal");
 const getProposals = (ids: string[]) => getByKeys<Proposal>(ids.map(id => `proposal:${id}`), "Proposal");
 const getAllProposals = () => getAllByPattern<Proposal>("proposal:*", "Proposal");
-const getUserProposals = (address: string) => getUser(address).then(user => getProposals(user.proposalIds));
+const getUserProposalIds = (address: string) => getUser(address).then(user => user.proposalIds);
+const getUserProposals = (address: string) => getUserProposalIds(address).then(getProposals);
 const pushProposal = (proposal: Proposal) => Promise.all([
   getTopic(proposal.topicId).then(topic => pushTopic({ ...topic, proposalId: proposal.id })),
   setByKey(`proposal:${proposal.id}`, proposal),
@@ -193,12 +213,13 @@ const getAllVotes = () => getAllByPattern<Vote>("vote:*", "Vote");
 const getUserProposalVote = (proposalId: string, address: string) => getByKey<Vote>(`user-votes:${address}:${proposalId}`, "Vote");
 const hasUserVoted = (proposalId: string, address: string) => redisGet(`user-votes:${address}:${proposalId}`).then(vote => !!vote);
 const getProposalVotes = (proposalId: string) => getSet<Vote>(`proposal-votes:${proposalId}`);
-const getUserVotes = (address: string) => getAllByPattern<Vote>(`user-votes:${address}:*`, "Vote");
+const getUserVoteIds = (address: string) => getUser(address).then(user => user.voteIds);
+const getUserVotes = (address: string) => getUserVoteIds(address).then(getVotes);
 const pushVote = (vote: Vote) => {
   Promise.all([
     setByKey(`vote:${vote.id}`, vote),
     getProposal(vote.proposalId).then(proposal => pushProposal({ ...proposal, voteIds: [...proposal.voteIds, vote.id] })),
-    addToSet(`user-votes:${vote.address}:${vote.proposalId}`, vote),
+    getUser(vote.address).then(user => pushUser({ ...user, voteIds: [...user.voteIds, vote.id] })),
     addToSet(`proposal-votes:${vote.proposalId}`, vote)
   ]);
 }
@@ -230,6 +251,9 @@ const revokeAllRoles = (address: string) => Promise.all([
   ["adm", "gov", "mod"].map(role => removeFromSet(`role:${role}`, address)),
   getUser(address).then(user => pushUser({ ...user, roles: [] }))
 ].flat());
+const blacklistForever = (id: string) => setByKey(`blacklist:${id}`, true);
+const blacklistFor = (id: string, interval: Interval|number) => redisSetEx(`blacklist:${id}`, "true", toSec(interval));
+const isBlacklisted = (id: string) => redisGet(`blacklist:${id}`).then(blacklisted => !!blacklisted);
 
 export {
   getRedis,
@@ -270,6 +294,8 @@ export {
   getAllAirDrops,
   pushAirDrop,
   getAllProposals,
+  getUserProposalIds,
+  getUserProposals,
   pushProposal,
   removeProposal,
   getUserLastProposal,
@@ -277,12 +303,18 @@ export {
   hasUserVoted,
   getProposalVotes,
   getAllVotes,
+  getUserVoteIds,
   getUserVotes,
-  getUserProposals,
+  increaseUserReputation,
+  decreaseUserReputation,
   pushVote,
   getTopic,
   getTopics,
   getAllTopics,
+  getUserTopicIds,
+  getUserTopics,
+  getTopicUsers,
+  getTopicUserAddresses,
   pushTopic,
   removeTopic,
   getTopicMessages,
@@ -313,6 +345,9 @@ export {
   revokeRole,
   revokeRoles,
   revokeAllRoles,
+  blacklistForever,
+  blacklistFor,
+  isBlacklisted,
   getUserMessageCountTtl,
   getUserProposalCountTtl,
   getUserMessageCountResetDate,

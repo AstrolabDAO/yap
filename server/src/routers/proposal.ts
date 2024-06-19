@@ -4,7 +4,9 @@ import { Proposal, User } from "../../../common/models";
 import { getAllProposals, getProposal, getTopic, getVotingEligibility, isModerator, isSpam, pushProposal, removeProposal } from "../io";
 import { useAuth } from "../middlewares/auth";
 import { canEdit, canPropose } from "../security";
-import { pushWebsocketMessage } from "../state";
+import { pushToClients } from "../state";
+import { validateBody } from "../middlewares/validation";
+import { cuffIfSpam } from "../mod";
 
 const router = Router();
 
@@ -31,25 +33,23 @@ router.get("/*", async (req: Request, res: Response) => {
   }
 });
 
-router.post("/", useAuth, async (req: Request, res: Response) => {
+router.post("/:topicId", useAuth, validateBody(
+  { "proposal": { "topicId": "string", "title": "string", "description": "string" } },
+  { allowExtend: false, allowPartial: false }
+), async (req: Request, res: Response) => {
   try {
-    const [topicId, title, description, user] = [
-      req.body.topicId,
-      req.body.title,
-      req.body.description,
+    let [topicId, proposal, user] = [
+      req.params.topicId,
+      req.body.proposal,
       res.locals.currentUser as User
     ];
 
-    if (!title || !description || !topicId) {
-      return res.status(400).json({ error: "Title, description, and topicId are required." });
-    }
-
-    if (await isSpam(title, description)) {
-      return res.status(400).json({ error: "Proposal contains spam." });
-    }
-
     if (!await canPropose(user)) {
       return res.status(403).json({ error: "Unauthorized to create proposals." });
+    }
+
+    if (await cuffIfSpam(user.address, proposal.title, proposal.description)) {
+      return res.status(400).json({ error: "Proposal contains spam." });
     }
 
     const topic = await getTopic(topicId);
@@ -61,11 +61,10 @@ router.post("/", useAuth, async (req: Request, res: Response) => {
     const votingEligibility = await getVotingEligibility();
 
     const now = Date.now();
-    const proposal: Proposal = {
+    proposal = <Proposal>{
+      ...proposal,
       id: crypto.randomUUID(),
       topicId,
-      title,
-      description,
       author: user.address,
       createdAt: now,
       updatedAt: now,
@@ -90,7 +89,7 @@ router.post("/", useAuth, async (req: Request, res: Response) => {
       },
     };
     await pushProposal(proposal);
-    await pushWebsocketMessage(proposal, "create", "proposal");
+    await pushToClients(proposal, "create", "proposal");
     res.status(201).json(proposal);
   } catch (error) {
     console.error("Error creating proposal:", error);
@@ -98,17 +97,28 @@ router.post("/", useAuth, async (req: Request, res: Response) => {
   }
 });
 
-router.put("/:proposalId", useAuth, async (req: Request, res: Response) => {
-  try {
-    const [proposalId, user] = [req.params.proposalId, res.locals.currentUser as User];
-    const updateable = ["title", "description", "startDate", "endDate", "votingPowerScheme", "snapshotConfig"];
-    const values = updateable.map(key => req.body[key]); // do not include non-validated post fields
-    if (!values.some(v => v)) {
-      return res.status(400).json({ error: "Nothing to update." });
+router.put("/:proposalId", useAuth, validateBody({
+  "proposal": {
+    "title": "string",
+    "description": "string",
+    "startDate": "number",
+    "endDate": "number",
+    "votingPowerScheme": "string",
+    "snapshotConfig": {
+      "interval": "number",
+      "randomize": "boolean",
+      "weightFunction": "string",
+      "startDate": "number",
+      "endDate": "number",
+      "xtokens": "array"
     }
-    const proposal: Proposal = {
+  }}, { allowExtend: false, allowPartial: true }
+), async (req: Request, res: Response) => {
+  try {
+    let [proposalId, proposal, user] = [req.params.proposalId, req.body.proposal, res.locals.currentUser as User];
+    proposal = <Proposal>{
       ...await getProposal(proposalId),
-      ...values,
+      ...proposal,
       updatedAt: Date.now(),
     };
     if (!await isModerator(user.address)) {
@@ -120,7 +130,7 @@ router.put("/:proposalId", useAuth, async (req: Request, res: Response) => {
       }
     }
     await pushProposal(proposal);
-    await pushWebsocketMessage(proposal, "update", "proposal");
+    await pushToClients(proposal, "update", "proposal");
     res.status(200).json(proposal);
   } catch (error) {
     console.error("Error updating proposal:", error);
@@ -128,7 +138,11 @@ router.put("/:proposalId", useAuth, async (req: Request, res: Response) => {
   }
 });
 
-router.put("/:proposalId/status", useAuth, async (req: Request, res: Response) => {
+// set status to active == green light, proceed with votes, closed == red light, proposal rejected
+router.put("/:proposalId/status", useAuth, validateBody(
+  { "status": "string" },
+  { allowExtend: false, allowPartial: false }
+), async (req: Request, res: Response) => {
   try {
     const [proposalId, user, status] = [
       req.params.proposalId,
@@ -163,7 +177,7 @@ router.put("/:proposalId/status", useAuth, async (req: Request, res: Response) =
     };
 
     await pushProposal(updatedProposal);
-    await pushWebsocketMessage(updatedProposal, "update", "proposal");
+    await pushToClients(updatedProposal, "update", "proposal");
     res.status(200).json(updatedProposal);
   } catch (error) {
     console.error("Error changing proposal status:", error);
@@ -178,18 +192,12 @@ router.delete("/:proposalId", useAuth, async (req: Request, res: Response) => {
       return res.status(403).json({ error: "Unauthorized to delete proposal." });
     }
     await removeProposal(proposalId);
-    await pushWebsocketMessage(proposalId, "delete", "proposal");
+    await pushToClients(proposalId, "delete", "proposal");
     res.status(200).json({ message: "Proposal deleted successfully." });
   } catch (error) {
     console.error("Error deleting proposal:", error);
     res.status(500).json({ error: "Failed to delete proposal." });
   }
 });
-
-// async function approveProposal(proposalId: string) {
-// }
-
-// async function rejectProposal(proposalId: string) {
-// }
 
 export default router;

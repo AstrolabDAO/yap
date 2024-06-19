@@ -2,10 +2,12 @@ import express, { Request, Response } from "express";
 import { verifyMessage } from "ethers";
 
 import { getProposalVotes, getUserProposalVote, getUserVotes } from "../io";
-import { castVote, generateVoteMessage } from "../vote";
+import { castVote, generateVoteMessage, tallyResults } from "../vote";
 import { verifyJwt } from "../security";
-import { Vote } from "../../../common/models";
-import { pushWebsocketMessage } from "../state";
+import { User, Vote } from "../../../common/models";
+import { pushToClients } from "../state";
+import { isGov, useAuth } from "../middlewares/auth";
+import { validateParams, validateQuery } from "../middlewares/validation";
 
 const router = express.Router();
 
@@ -23,9 +25,12 @@ router.get("/:voteId", async (req: Request, res: Response) => {
   }
 });
 
-router.get("/*", async (req: Request, res: Response) => {
+router.get("/*", validateQuery(
+  { proposalId: "string", userId: "string" },
+  { allowExtend: false, allowPartial: true }
+), async (req: Request, res: Response) => {
   try {
-    const [proposalId, userId] = [req.query.topicId, req.query.userId, []];
+    const { proposalId, userId } = req.query;
     let votes: Vote[] = [];
     if (proposalId && userId) {
       votes = [await getUserProposalVote(<string>proposalId, <string>userId)];
@@ -57,11 +62,37 @@ router.post("/:proposalId", async (req: Request, res: Response) => {
 
   try {
     await castVote(proposalId, user, vote, signature);
-    await pushWebsocketMessage(vote, "create", "proposal");
+    await pushToClients(vote, "create", "proposal");
     res.json({ message: "Vote cast successfully" });
   } catch (error) {
     console.error("Error casting vote:", error);
     res.status(500).json({ error: "Failed to cast vote" });
+  }
+});
+
+router.get("/verify/:proposalId/:vote/:signature", useAuth, validateParams(
+  { proposalId: "string", vote: "number", signature: "string" }
+), async (req: Request, res: Response) => {
+  const user = res.locals.currentUser as User;
+  const { proposalId, vote, signature } = req.params;
+  const message = await generateVoteMessage(proposalId, Number(vote), user);
+  const addr = verifyMessage(message, signature);
+
+  if (!addr || addr.toLowerCase() !== user.address.toLowerCase()) {
+    return res.status(400).json({ error: "Invalid signature" });
+  }
+
+  res.status(200).json({ message: "Signature verified" });
+});
+
+router.get("/tally/:proposalId", isGov, async (req: Request, res: Response) => {
+  const { proposalId } = req.params;
+  try {
+    const results = await tallyResults(proposalId);
+    res.status(200).json(results);
+  } catch (error) {
+    console.error("Error tallying votes:", error);
+    res.status(500).json({ error: "Failed to tally votes" });
   }
 });
 

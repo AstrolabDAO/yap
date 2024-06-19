@@ -1,8 +1,8 @@
 import express, { Request, Response } from "express";
-import { getUser, incrementUserMuteCount, isAdmin, isModerator } from "../io";
-import { isAdm, isMod, useAuth } from "../middlewares/auth";
-import { banUser, muteUser } from "../security";
-import config from "../config";
+
+import { isAdmin, isModerator } from "../io";
+import { isMod, useAuth } from "../middlewares/auth";
+import { banUser, muteUser } from "../mod";
 
 const router = express.Router();
 
