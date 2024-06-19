@@ -1,10 +1,9 @@
-import { ethers } from "ethers";
-
 import { JwtPayload, User, Vote, VoteResults } from "../../common/models";
 import { getVotingPower } from "../../common/maths/voting-schemes";
 import config from "./config";
 import { getProposal, getProposalVotes, hasUserVoted, pushProposal, pushVote } from "./io";
 import { getEligibility } from "./security";
+import { verifyMessage } from "ethers";
 
 /**
  * Generates a message to be signed by the user for a vote
@@ -29,22 +28,6 @@ async function generateVoteMessage(proposalId: string, value: number, user: User
     timestamp: Date.now(), // To prevent replay attacks
   });
   return message;
-}
-
-/**
- * Verifies a signed vote message
- * @param message - The original message that was signed
- * @param signature - The signature provided by the user
- * @returns The address of the signer if the signature is valid, null otherwise
- */
-function verifyVoteSignature(message: string, signature: string): string | null {
-  try {
-    const sig = ethers.Signature.from(signature); // r,s,v..
-    return ethers.recoverAddress(ethers.hashMessage(message), sig);
-  } catch (error) {
-    console.error("Error verifying signature:", error);
-    return null; // Invalid signature
-  }
 }
 
 // Cast Vote (User must be eligible)
@@ -75,8 +58,7 @@ async function castVote(proposalId: string, user: User|JwtPayload, value: 1|0|-1
   };
 
   const message = JSON.stringify(vote);
-
-  const addr = verifyVoteSignature(message, signature);
+  const addr = verifyMessage(message, signature);
   if (addr?.toLowerCase?.() !== user.address.toLowerCase()) {
     throw new Error("Invalid signature.");
   }
@@ -100,21 +82,6 @@ async function castVote(proposalId: string, user: User|JwtPayload, value: 1|0|-1
   if (autoUpdate) {
     await tallyResults(proposalId);
   }
-}
-
-async function pauseVote(proposalId: string) {
-}
-
-async function cancelVote(proposalId: string) {
-}
-
-async function closeVote(proposalId: string) {
-}
-
-async function approveProposal(proposalId: string) {
-}
-
-async function rejectProposal(proposalId: string) {
 }
 
 async function tallyResults(proposalId: string) {
@@ -151,5 +118,14 @@ async function tallyResults(proposalId: string) {
   await pushProposal({ ...proposal, results });
 }
 
-export { approveProposal, cancelVote, castVote, closeVote, generateVoteMessage, pauseVote, rejectProposal, tallyResults, verifyVoteSignature };
+// async function pauseVote(proposalId: string) {
+// }
+
+// async function cancelVote(proposalId: string) {
+// }
+
+// async function closeVote(proposalId: string) {
+// }
+
+export { castVote, generateVoteMessage, tallyResults };
 

@@ -1,6 +1,7 @@
 type VoteValue = 1 | 0 | -1; // For, Abstain, Against
 type Role = "adm" | "gov" | "mod"; // Admin, Governor, Moderator
 type Status = "pending" | "active" | "closed" | "paused" | "canceled";
+type Interval = "s1" | "s5" | "s15" | "s30" | "m1" | "m5" | "m10" | "m15" | "m30" | "h1" | "h4" | "h8" | "h12" | "D1" | "W1" | "M1" | "M3" | "M6" | "Y1" | 'forever';
 type MovingAverage =
   | "simple"
   | "exponential"
@@ -19,32 +20,34 @@ type VotingPowerScheme =
   | "sigmoid";
 type ModAction = "mute" | "ban"; // Mute, Ban
 type VoteOutcome = "pending" | "passed" | "failed"; // == proposal accepted / rejected
-
+type WsMethod = "subscribe" | "unsubscribe" | "create" | "update" | "delete";
+type EligibilityCriteria = EligibilityCriterion[];
 interface GeneralEligibility {
   aliases: { [xtoken: string]: string }; // Mapping of token identifiers (eg. eth:weth) to addresses
-  messaging: EligibilityCriteria[]; // Eligibility criteria for messaging
-  posting: EligibilityCriteria[]; // Eligibility criteria for posting
-  voting: EligibilityCriteria[]; // Eligibility criteria for voting
+  messaging: EligibilityCriteria; // Eligibility criteria for messaging
+  proposing: EligibilityCriteria; // Eligibility criteria for posting
+  voting: EligibilityCriteria; // Eligibility criteria for voting
 }
 
-interface EligibilityCriteria {
+interface EligibilityCriterion {
   xtoken: string; // Token identifier
   min_balance: number; // Minimum token balance
-  min_duration: number; // Minimum duration in days
+  min_duration: number | Interval; // Minimum duration in days
   balance_multiplier: number; // Balance factor
   duration_multiplier: number; // Duration factor
 }
 
 interface ModRule {
   after: number; // Number of messages before action
-  duration: number | "forever"; // Duration of action in seconds
+  duration: number | Interval; // Duration of action in seconds
 }
 
 interface Config {
   server: {
     port: number; // Port to run the server on
     host: string; // Hostname to bind to
-    jwt_secret: string; // Secret for JWT signing
+    jwt_session_salt: string; // Salt for JWT session tokens
+    jwt_refresh_salt: string; // Salt for JWT refresh tokens
   };
   redis: {
     host: string; // Redis hostname
@@ -63,10 +66,11 @@ interface Config {
     mute: ModRule[]; // Array of mute rules
     ban: ModRule[]; // Array of ban rules
     revoke_on_ban: boolean; // Whether to revoke all roles on ban
-    post_cooldown: number; // Minimum seconds between posts/topic creation
-    post_limit: number; // Maximum posts/topic creation per day
-    message_cooldown: number; // Number of seconds between messages
-    message_limit: number; // Maximum number of messages per day
+    proposal_cooldown: number | Interval; // Minimum seconds between posts/topic creation
+    daily_proposal_limit: number; // Maximum posts/topic creation per day
+    message_cooldown: number | Interval; // Number of seconds between messages
+    daily_message_limit: number; // Maximum number of messages per day
+    edit_timeout: number | Interval; // Number of seconds to allow editing of messages
   };
   governance: {
     // Governance configuration
@@ -75,20 +79,22 @@ interface Config {
   };
 }
 
-interface Message {
+interface Authored {
   id: string;
-  topicId: string;
   author: string; // EVM address
+  createdAt: number; // Timestamp
+  updatedAt: number; // Timestamp
+}
+
+interface Message extends Authored {
+  topicId: string;
   content: string;
   upvotes: string[]; // EVM addresses
   downvotes: string[]; // EVM addresses
 }
 
-interface Topic {
-  id: string;
+interface Topic extends Message {
   title: string;
-  author: string; // EVM address
-  createdAt: number; // Timestamp
   messageIds: string[];
   proposalId?: string; // If a proposal is attached
 }
@@ -134,16 +140,15 @@ interface Snaphshoted {
   description: string;
   startDate: number;
   endDate: number;
-  config: SnapshotConfig;
-  eligibility: EligibilityCriteria[];
+  snapshotConfig: SnapshotConfig;
+  eligibility: EligibilityCriteria;
   snapshotIds: string[];
   status: Status; // if pending, can be accepted or rejected by governors
 }
 
 interface AirDrop extends Snaphshoted {}
 
-interface Proposal extends Snaphshoted {
-  author: string;
+interface Proposal extends Authored, Snaphshoted {
   votingPowerScheme: string; // "affine", "linear", etc.
   voteIds: string[];
   results: VoteResults;
@@ -174,6 +179,11 @@ interface JwtPayload {
   jti?: string;
 }
 
+interface UserModeration {
+  muted: { since: number; until: number; by: string; count: number};
+  banned: { since: number; until: number; by: string; count: number }
+}
+
 interface User extends JwtPayload {
   ens: string;
   name: string; // display name/alias
@@ -181,7 +191,8 @@ interface User extends JwtPayload {
   balances: { [xtoken: string]: number };
   proposalIds: string[]; // Proposal IDs
   topics: string[]; // Topic IDs
-  // messages: { [topicId: string]: { [messageId: string]: Message } }; // not stored on the in-memory user object to save memory
+  joined: number; // Timestamp
+  moderation: UserModeration;
 }
 
 interface Network {
@@ -192,6 +203,9 @@ interface Network {
 }
 
 export {
+  WsMethod,
+  Interval,
+  Authored,
   VoteValue,
   Role,
   Status,
@@ -199,6 +213,7 @@ export {
   ModRule,
   ModAction,
   VoteOutcome,
+  EligibilityCriterion,
   EligibilityCriteria,
   GeneralEligibility,
   Config,
