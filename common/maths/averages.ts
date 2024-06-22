@@ -228,8 +228,8 @@ function getMovingAverageFunction(name: string) {
 }
 
 function getMovingAverage(
-  series: number[] | bigint[],
   name: string,
+  series: number[] | bigint[],
   ...args: any[]
 ): number[] {
   return getMovingAverageFunction(name)?.(series, ...args);

@@ -98,7 +98,7 @@ router.delete("/topic/:topicId", useAuth, async (req: Request, res: Response) =>
   try {
     const [topicId, user] = [req.params.topicId, res.locals.currentUser as User];
     const topic = await getTopic(topicId);
-    if (!await canEdit(user, topic)) {
+    if (!await canEdit(user, topic!)) {
       return res.status(403).json({ error: "Unauthorized to delete topic." });
     }
     await removeTopic(topicId);

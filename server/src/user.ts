@@ -1,7 +1,6 @@
 import { getAddress } from "ethers";
 
 import { EligibilityCriteria, Role, User } from "../../common/models";
-import { Blocky } from "../../common/rendering";
 import { getEligibility, getUser, grantRole, pushEligibilities, pushUser } from "./io";
 import { getProvider } from "./state";
 import config from "./config";
@@ -12,7 +11,6 @@ async function createUserFromAddress(address: string): Promise<User> {
 
   address = getAddress(address); // ensure checksum
   const ens = await (await getProvider(1)).lookupAddress(address);
-  const blocky = new Blocky({ seed: address, scale: 32, size: 7 });
   const prev = await getUser(address);
   if (prev) {
     throw new Error(`User already exists: ${JSON.stringify(prev)}`);
@@ -23,7 +21,7 @@ async function createUserFromAddress(address: string): Promise<User> {
     name: ens?.replace(".eth", "") || "Anon",
     title: "Citizen",
     joined: Date.now(),
-    picture: blocky.getDataUrl(),
+    picture: "",
     proposalIds: [],
     topicIds: [],
     voteIds: [],
@@ -82,7 +80,7 @@ async function initEligibility() {
     , null, 2)}...`
   );
   const types = ["messaging", "proposing", "voting"];
-  const prevs: EligibilityCriteria[] = await Promise.all(types.map((type) => getEligibility(type)));
+  const prevs = await Promise.all(types.map((type) => getEligibility(type))) as EligibilityCriteria[];
   return Promise.all(types.filter((_, i) => !prevs[i]).map((type) =>
       pushEligibilities(type, (<any>config.governance.eligibility)[type])));
 }

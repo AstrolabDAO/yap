@@ -1,14 +1,12 @@
 import { Contract as MultiContract, Provider as MultiProvider } from "ethcall";
-import { Contract, JsonRpcProvider, JsonFragment } from "ethers";
+import { Contract, JsonFragment, JsonRpcProvider } from "ethers";
+import { Express } from "express";
 import { Server } from "http";
 import WebSocket from "ws";
-import { Express } from "express";
 
 import { ASTROLAB_CDN, DEFAULT_ABI } from "../../common/constants";
 import { EligibilityCriteria, Network, WsMethod } from "../../common/models";
 import config from "./config";
-import { getEligibility, getUser, grantRole, pushEligibilities, pushSpamFilters } from "./io";
-import { createUserFromAddress } from "./user";
 
 const networkById: Map<string | number, Network> = new Map();
 const providerByNetworkId: Map<string | number, JsonRpcProvider> = new Map();
@@ -25,12 +23,12 @@ const xTokenAliases: { [alias: string]: string } =
 const usedChainIds = new Set<number|string>(
   [
     Object.values(config.governance.eligibility.aliases).map((alias) =>
-      getChainId(alias)
+      Number(getChainId(alias))
     ),
     ["messaging", "proposing", "voting"].map((type) =>
       Object.values(
         <EligibilityCriteria>(<any>config.governance.eligibility)[type]
-      ).map((crit) => getChainId(crit.xtoken))
+      ).map((crit) => Number(getChainId(crit.xtoken)))
     ),
   ].flat(2)
 );
@@ -122,7 +120,7 @@ async function getMultiContract(
 async function initNetworkProviders() {
   try {
     const ids = [];
-    if (networkById.size === 0) {
+    if (!networkById?.size) {
       const response = await fetch(`${ASTROLAB_CDN}/data/networks.json`);
       for (const n of <Network[]>await response.json()) {
         if (!usedChainIds.has(n.id)) {
@@ -152,15 +150,9 @@ async function initNetworkProviders() {
 }
 
 export {
-  getContract,
+  getChainId, getContract,
   getMultiContract,
   getMultiProvider,
-  getProvider,
-  pushToClients,
-  xTokenAliases,
-  usedChainIds,
-  getXToken,
-  getChainId,
-  initNetworkProviders,
+  getProvider, getXToken, initNetworkProviders, pushToClients, usedChainIds, xTokenAliases
 };
 export default { server, app, wss };

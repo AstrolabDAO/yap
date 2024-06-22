@@ -1,12 +1,12 @@
 import { Request, Response, Router } from "express";
 
 import { Message, User } from "../../../common/models";
-import { getMessage, getMessageDownvotes, getMessageUpvotes, getTopic, getTopicMessages, getUserMessages, isSpam, pushMessage, pushMessageDownvote, pushMessageUpvote, removeMessage, removeMessageDownvote, removeMessageUpvote } from "../io";
+import { getMessage, getMessageDownvotes, getMessageUpvotes, getTopic, getTopicMessages, getUserMessages, pushMessage, pushMessageDownvote, pushMessageUpvote, removeMessage, removeMessageDownvote, removeMessageUpvote } from "../io";
 import { useAuth } from "../middlewares/auth";
-import { canEdit, canMessage } from "../security";
-import state, { pushToClients } from "../state";
 import { validateBody, validateParams } from "../middlewares/validation";
 import { cuffIfSpam } from "../mod";
+import { canEdit, canMessage } from "../security";
+import { pushToClients } from "../state";
 
 const router = Router();
 
@@ -28,9 +28,9 @@ router.get("/*", async (req: Request, res: Response) => {
     const [topicId, userId] = [req.query.topicId, req.query.userId, []];
     let messages: Message[] = [];
     if (topicId) {
-      messages = await getTopicMessages(<string>topicId);
+       messages = await getTopicMessages(<string>topicId) as Message[];
     } else if (userId) {
-      messages = await getUserMessages(<string>userId);
+      messages = await getUserMessages(<string>userId) as Message[];
     }
     if (!messages) {
       return res.status(404).json({ error: "Messages not found, please provide a valid topicId or userId." });
@@ -103,10 +103,10 @@ router.delete("/:messageId", useAuth, async (req: Request, res: Response) => {
   try {
     const [messageId, user] = [req.params.messageId, res.locals.currentUser as User];
     const message = await getTopic(messageId);
-    if (!await canEdit(user, message)) {
+    if (!await canEdit(user, message!)) {
       return res.status(403).json({ error: "Unauthorized to delete message." });
     }
-    await removeMessage(message);
+    await removeMessage(message!);
     await pushToClients(messageId, "delete", "message");
     res.status(200).json({ message: "Message deleted successfully." });
   } catch (error) {

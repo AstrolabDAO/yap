@@ -31,7 +31,7 @@ router.get("/*", validateQuery(
 ), async (req: Request, res: Response) => {
   try {
     const { proposalId, userId } = req.query;
-    let votes: Vote[] = [];
+    let votes: (Vote|null)[] = [];
     if (proposalId && userId) {
       votes = [await getUserProposalVote(<string>proposalId, <string>userId)];
     } else if (proposalId) {

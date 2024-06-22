@@ -1,1 +1,4 @@
-// imports...
+@import "./styles/typo.css";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;

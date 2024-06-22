@@ -1,15 +1,22 @@
 import * as jwt from "jsonwebtoken";
 
 import {
+  AirDrop,
   Authored,
+  Currency,
   EligibilityCriteria,
   Interval,
   JwtPayload,
-  User,
+  Proposal,
+  User
 } from "../../common/models";
+import { toMs } from "../../common/utils";
+import { getMovingAverage } from "../../common/maths/averages";
 import config from "./config";
 import {
   blacklistFor,
+  getBalances,
+  getSnapShots,
   getUserLastMessage,
   getUserLastProposal,
   getUserMessageCount,
@@ -18,7 +25,6 @@ import {
   isModerator
 } from "./io";
 import { getXToken } from "./state";
-import { getBalances, toMs } from "./utils";
 
 function generateJwt(
   payload: JwtPayload,
@@ -71,14 +77,37 @@ function verifyAndRefreshJwt(
   return [token, payload];
 }
 
+async function averageSnapshotBalances(address: string, options: { snapshotIds?: string[], proposal?: Proposal, airDrop?: AirDrop, denomination?: Currency }): Promise<number[]> {
+  const ids = options.snapshotIds ?? options.proposal?.snapshotIds ?? [];
+  if (!ids.length) {
+    throw new Error(`No snapshots found for ${address}, snapshotIds: ${ids}`);
+  }
+  if (options.denomination && options.denomination !== "usd") {
+    throw new Error(`Unsupported denomination: ${options.denomination}, use any of [USD, undefined (raw token balances)]`);
+  }
+  const snapshots = await getSnapShots(ids);
+  const balances: { [xtoken: string]: number }[] =
+    snapshots.map((s) => (options.denomination ? s!.usdBalances[address] : s!.balances[address]) ?? 0);
+  const sums = balances.map((b) => Object.values(b).reduce((acc, val) => acc + val, 0)); // by epoch
+  return getMovingAverage(options.proposal?.snapshotConfig.weightFunction ?? "simple", sums);
+}
+
+function defaultVotingEligibility(): EligibilityCriteria {
+  return config.governance.eligibility.voting;
+}
+
 async function getEligibility(
   user: User | JwtPayload,
-  criteria: EligibilityCriteria
-): Promise<[boolean, bigint[]]> {
+  criteria: EligibilityCriteria,
+  proposal?: Proposal,
+): Promise<[boolean, number[]]> {
   const relevantXTokens = [
     ...new Set([...criteria.map((c) => getXToken(c.xtoken))]),
   ];
-  const balances = await getBalances(user.address, relevantXTokens);
+  const balances = proposal?.snapshotIds ?
+    await averageSnapshotBalances(user.address, { proposal }) :
+    await getBalances(user.address, relevantXTokens);
+
   const eligible = criteria.some(
     (crit) =>
       balances[relevantXTokens.indexOf(crit.xtoken)] > BigInt(crit.min_balance)
@@ -137,7 +166,7 @@ async function canPropose(user: User): Promise<boolean> {
 }
 
 async function canVote(user: User): Promise<boolean> {
-  return (await getEligibility(user, await getVotingEligibility()))[0];
+  return (await getEligibility(user, await getVotingEligibility() as EligibilityCriteria))[0];
 }
 
 async function canLogin(user: User): Promise<boolean> {
@@ -147,13 +176,17 @@ async function canLogin(user: User): Promise<boolean> {
 export {
   canEdit,
   canLogin,
-  canMessage, canPropose,
+  canMessage,
+  canPropose,
   canVote,
   generateJwt,
-  getEligibility,
   isBanned,
   isMuted,
-  isMutedOrBanned, revokeJwt, verifyAndRefreshJwt,
-  verifyJwt
+  isMutedOrBanned,
+  revokeJwt, verifyAndRefreshJwt,
+  verifyJwt,
+  averageSnapshotBalances,
+  defaultVotingEligibility,
+  getEligibility,
 };
 

@@ -1,10 +1,10 @@
 import express, { Request, Response } from "express";
-import { Topic, User } from "../../../common/models";
+import { User } from "../../../common/models";
+import { getTopic, getTopicUsers, isModerator, pushUser } from "../io";
 import { useAuth } from "../middlewares/auth";
 import { validateBody, validateQuery } from "../middlewares/validation";
-import { getTopic, getTopicUsers, getUser, isModerator, pushUser } from "../io";
-import { clonePartial } from "../utils";
 import { userPublicAttributes } from "../user";
+import { clonePartial } from "../../../common/utils";
 
 const router = express.Router();
 

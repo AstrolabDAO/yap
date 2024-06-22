@@ -1,5 +1,5 @@
-type VoteValue = 1 | 0 | -1; // For, Abstain, Against
 type Role = "adm" | "gov" | "mod"; // Admin, Governor, Moderator
+type Resource = "user" | "topic" | "proposal" | "message" | "vote" | "snapshot" | "airdrop";
 type Status = "pending" | "active" | "closed" | "paused" | "canceled";
 type Interval = "s1" | "s5" | "s15" | "s30" | "m1" | "m5" | "m10" | "m15" | "m30" | "h1" | "h4" | "h8" | "h12" | "D1" | "W1" | "M1" | "M3" | "M6" | "Y1" | 'forever';
 type MovingAverage =
@@ -19,9 +19,29 @@ type VotingPowerScheme =
   | "cubicSpline"
   | "sigmoid";
 type ModAction = "mute" | "ban"; // Mute, Ban
-type VoteOutcome = "pending" | "passed" | "failed"; // == proposal accepted / rejected
 type WsMethod = "subscribe" | "unsubscribe" | "create" | "update" | "delete";
 type Theme = "light" | "dark" | "astrolab" | "radyal";
+interface ThemeConfig {
+  name: Theme;
+  titleFont: string;
+  bodyFont: string;
+  monoFont: string;
+  primary: string;
+  secondary: string;
+  success: string;
+  failure: string;
+  warning: string;
+  info: string;
+  dark: { [depth: number|string]: string };
+  fg0: string;
+  fg1: string;
+  fg2: string;
+  fg3: string;
+  bg0: string;
+  bg1: string;
+  bg2: string;
+  bg3: string;
+}
 type Currency = "usd" | "eur" | "eth" | "btc";
 type Locale = "en" | "es" | "fr" | "de" | "it" | "ja" | "ko" | "pt" | "ru" | "zh";
 type PrimitiveType = 'string' | 'number' | 'boolean' | 'null' | 'array';
@@ -105,29 +125,16 @@ interface Topic extends Message {
   proposalId?: string; // If a proposal is attached
 }
 
-interface VoteCount {
-  total: number;
-  for: number;
-  against: number;
-  abstain: number;
-}
-
-interface VoteResults {
-  outcome: VoteOutcome;
-  count: VoteCount;
-  weighted: VoteCount;
-}
-
 interface Snapshot {
   id: string;
   airDropId: string;
   proposalId: string;
   timestamp: number;
-  balances: { [address: string]: { [xtoken: string]: bigint } };
   blockNumbers: { [xtoken: string]: number };
-  usdBalances: { [address: string]: number };
+  balances: { [address: string]: { [xtoken: string]: number } };
+  usdBalances: { [address: string]: { [xtoken: string]: number } };
   totalSupply: { [xtoken: string]: bigint };
-  usdTotalSupply: { [xtoken: string]: number };
+  usdTotalSupply: { [xtoken: string]: number }; // == market cap
 }
 
 interface SnapshotConfig {
@@ -154,10 +161,23 @@ interface Snaphshoted {
 
 interface AirDrop extends Snaphshoted {}
 
+interface VoteResult {
+  count: number;
+  totalWeight: number;
+  participation: number; // count (in $ or token count) / total eligible market caps
+  countByChoice: { [choice: string]: number };
+  weightByChoice: { [choice: string]: number };
+  outcome: "pending" | "passed" | "failed"; // failed if proposal is canceled or closed and participation < quorum
+  choice: string; // choice with highest weight (winner)
+}
+
 interface Proposal extends Authored, Snaphshoted {
   votingPowerScheme: string; // "affine", "linear", etc.
+  choices: number[]; // eg. 0: for, 1: against, 2: abstain, 0: choice A, 1: choice B, etc.
+  labels: string[]; // eg. "for", "against", "abstain", "choice A", "choice B", etc.
   voteIds: string[];
-  results: VoteResults;
+  result: VoteResult;
+  quorum: number; // minimum percentage of total vote count required (% of eligible tokens, not weighted voting power)
 }
 
 interface Vote {
@@ -165,7 +185,7 @@ interface Vote {
   proposalId: string;
   address: string; // user address
   balances: { [xtoken: string]: bigint };
-  value: VoteValue;
+  value: number;
   power: number; // voting power
   weighted: number; // power * vote (1 for, -1 against, 0 abstain)
   signature: string;
@@ -226,26 +246,29 @@ interface Network {
   name: string;
   slug: string;
   id: number;
+  icon?: string;
   httpRpcs: string[];
+  explorers: string[];
 }
 
 export {
   Schema,
+  Resource,
   ValidationOption,
   Locale,
   Currency,
   Theme,
+  ThemeConfig,
   MovingAverage,
   WsMethod,
   Interval,
   Authored,
-  VoteValue,
   Role,
   Status,
   VotingPowerScheme,
   ModRule,
   ModAction,
-  VoteOutcome,
+  VoteResult,
   EligibilityCriterion,
   EligibilityCriteria,
   GeneralEligibility,
@@ -257,8 +280,6 @@ export {
   User,
   Network,
   Vote,
-  VoteCount,
-  VoteResults,
   Snapshot,
   SnapshotConfig,
   AirDrop,

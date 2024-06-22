@@ -1,5 +1,7 @@
 import { Call as MultiCall } from "ethcall";
 
+import { NATIVE_ALIAS } from "../../common/constants";
+import { Schema, ValidationOption } from "../../common/models";
 import {
   getBalances as getCachedBalances,
   getRedis,
@@ -12,9 +14,6 @@ import {
   getMultiProvider,
   getProvider,
 } from "./state";
-import { EligibilityCriteria, Interval, Schema, User, ValidationOption } from "../../common/models";
-import { NATIVE_ALIAS } from "../../common/constants";
-import config from "./config";
 
 async function getBalance(address: string, xtoken: string): Promise<string> {
   const r = await getRedis();
@@ -32,9 +31,9 @@ async function getBalance(address: string, xtoken: string): Promise<string> {
 async function getBalances(
   address: string,
   xtokens: string[]
-): Promise<bigint[]> {
+): Promise<number[]> {
   let balances = await getCachedBalances(address, xtokens);
-  const balanceByToken: { [token: string]: bigint } = {};
+  const balanceByToken: { [token: string]: number } = {};
   const callsByChainId: { [chainId: string]: MultiCall[] } = {};
   const tokensByChainId: { [chainId: string]: string[] } = {};
   const extraneousPromises = [];
@@ -42,11 +41,11 @@ async function getBalances(
   for (let i = 0; i < xtokens.length; i++) {
     if (!balances[i]) {
       const [chainId, token] = xtokens[i].split(":");
-      if (token == NATIVE_ALIAS) {
+      if (token === NATIVE_ALIAS) {
         extraneousPromises.push(
           getProvider(chainId)
-            .then((p) => p.getBalance(address))
-            .then((b) => (balanceByToken[xtokens[i]] = BigInt(b)))
+            .then(p => p.getBalance(address))
+            .then(b => (balanceByToken[xtokens[i]] = Number(b) / 1e18))
         );
         continue;
       }
@@ -55,10 +54,10 @@ async function getBalances(
         tokensByChainId[chainId] = [];
       }
       const contract = await getMultiContract(xtokens[i]);
-      callsByChainId[chainId].push(contract.balanceOf(address));
+      callsByChainId[chainId].push(contract.balanceOf(address), contract.decimals());
       tokensByChainId[chainId].push(xtokens[i]);
     } else {
-      balanceByToken[xtokens[i]] = BigInt(balances[i]);
+      balanceByToken[xtokens[i]] = balances[i];
     }
   }
 
@@ -66,19 +65,19 @@ async function getBalances(
     ...Object.entries(callsByChainId).map(async ([chainId, calls]) => {
       const provider = await getMultiProvider(chainId);
       const results = await provider.all(calls);
-      results.forEach((result, index) => {
-        balanceByToken[tokensByChainId[chainId][index]] = BigInt(
-          result as string
-        );
-      });
+      for (let i = 0; i < results.length; i += 2) {
+        const xtoken = tokensByChainId[chainId][i / 2];
+        const decimals = Number(results[i + 1]);
+        balanceByToken[xtoken] = Number(results[i]) / 10 ** decimals;
+      }
     }),
     ...extraneousPromises,
   ]);
 
-  balances = xtokens.map((token) => balanceByToken[token]);
   await setBalances(address, balanceByToken);
   return balances;
 }
+
 
 function getFrom<T>(from: any, what: string): T {
   const o = (<any>from)[what];
@@ -86,49 +85,6 @@ function getFrom<T>(from: any, what: string): T {
     throw new Error(`Missing ${what} in object: ${JSON.stringify(from)}`);
   }
   return o as T;
-}
-
-function unique<T>(arr: T[]): T[] {
-  return [...new Set(arr)];
-}
-
-function toSec(interval: number | Interval): number {
-  if (typeof interval === "number") {
-    return interval;
-  }
-  if (interval === "forever") {
-    return Number.MAX_SAFE_INTEGER;
-  }
-  const match = interval.match(/^(\d+)(s|m|h|D|W|M|Y)?$/);
-  if (!match) {
-    throw new Error(`Invalid interval: ${interval}`);
-  }
-  const value = parseInt(match[1]);
-  switch (match[2]) {
-    case "s": return value;
-    case "m": return value * 60;
-    case "h": return value * 3600;
-    case "D": return value * 86400;
-    case "W": return value * 604800;
-    case "M": return value * 2592000;
-    case "Y": return value * 31536000;
-    default: return value;
-  }
-}
-
-function toMs(interval: number | Interval): number {
-  return toSec(interval) * 1000;
-}
-
-function clonePartial(obj: any, { exclude = [], include = [] }: { exclude?: string[], include?: string[] }): any {
-  const clone = { ...obj };
-  if (include.length) {
-    Object.keys(clone).forEach(key => !include.includes(key) && delete clone[key]);
-  }
-  if (exclude.length) {
-    exclude.forEach(key => delete clone[key]);
-  }
-  return clone;
 }
 
 function validate(
@@ -167,9 +123,6 @@ export {
   getBalance,
   getBalances,
   getFrom,
-  unique,
-  toSec,
-  toMs,
-  clonePartial,
-  validate,
+  validate
 };
+

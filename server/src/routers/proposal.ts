@@ -1,12 +1,12 @@
 import { Request, Response, Router } from "express";
 
 import { Proposal, User } from "../../../common/models";
-import { getAllProposals, getProposal, getTopic, getVotingEligibility, isModerator, isSpam, pushProposal, removeProposal } from "../io";
+import { getAllProposals, getProposal, getTopic, getVotingEligibility, isModerator, pushProposal, removeProposal } from "../io";
 import { useAuth } from "../middlewares/auth";
-import { canEdit, canPropose } from "../security";
-import { pushToClients } from "../state";
 import { validateBody } from "../middlewares/validation";
 import { cuffIfSpam } from "../mod";
+import { canEdit, canPropose } from "../security";
+import { pushToClients } from "../state";
 
 const router = Router();
 
@@ -80,7 +80,7 @@ router.post("/:topicId", useAuth, validateBody(
         weightFunction: "simple",
         startDate: 0,
         endDate: 0,
-        xtokens: votingEligibility.map((c) => c.xtoken),
+        xtokens: votingEligibility.map((c) => c!.xtoken),
       },
       status: "pending",
       results: {

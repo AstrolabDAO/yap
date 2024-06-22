@@ -1,19 +1,19 @@
-import http from "http";
 import cors from "cors";
 import express from "express";
+import http from "http";
 import WebSocket from "ws";
 
 import config from "./src/config";
-import state, { initNetworkProviders } from "./src/state";
-import vote from "./src/routers/vote";
-import message from "./src/routers/message";
-import topic from "./src/routers/topic";
-import proposal from "./src/routers/proposal";
-import moderation from "./src/routers/moderation";
-import stats from "./src/routers/stats";
-import setupWs from "./src/routers/ws";
-import { initRoles, initEligibility } from "./src/user";
 import { initSpamFilters } from "./src/mod";
+import message from "./src/routers/message";
+import moderation from "./src/routers/moderation";
+import proposal from "./src/routers/proposal";
+import stats from "./src/routers/stats";
+import topic from "./src/routers/topic";
+import vote from "./src/routers/vote";
+import setupWs from "./src/routers/ws";
+import state, { initNetworkProviders } from "./src/state";
+import { initEligibility, initRoles } from "./src/user";
 
 async function init() {
   return Promise.all([

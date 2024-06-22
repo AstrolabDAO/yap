@@ -171,7 +171,6 @@ function cubicSpline(
 
     if (tokensInInterval > 0) {
       const t1 = (x1 - (i === 0 ? 0 : points[i - 1][0])) / (x2 - x1);
-      const t2 = 1;
       const votingPower1 = y1 + ((x2 - x1) * (t1 * m1 + (1 - t1) * m2)) / 2;
       const votingPower2 = y2;
       const intervalVotingPower =
