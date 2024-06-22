@@ -44,7 +44,7 @@ interface ThemeConfig {
 }
 type Currency = "usd" | "eur" | "eth" | "btc";
 type Locale = "en" | "es" | "fr" | "de" | "it" | "ja" | "ko" | "pt" | "ru" | "zh";
-type PrimitiveType = 'string' | 'number' | 'boolean' | 'null' | 'array';
+type PrimitiveType = 'string' | 'number' | 'boolean' | 'null' | 'array' | 'any' | 'array<string>' | 'array<number>' | 'array<boolean>' | 'array<any>';
 type Schema = PrimitiveType | { [key: string]: Schema } | Schema[];
 type ValidationOption = { allowPartial?: boolean, allowExtend?: boolean };
 type EligibilityCriteria = EligibilityCriterion[];

@@ -87,36 +87,38 @@ function getFrom<T>(from: any, what: string): T {
   return o as T;
 }
 
-function validate(
-  o: any,
-  schema: Schema,
-  options: ValidationOption={}
-): boolean {
+function validate(o: any, schema: Schema | string, options: ValidationOption = {}): boolean {
+  options = { allowPartial: false, allowExtend: false, ...options };
 
-  options = { allowPartial: false, allowExtend: false, ...(options) };
   const getType = (value: any) =>
     value === null ? "null" : Array.isArray(value) ? "array" : typeof value;
 
-  if (typeof schema === "string") return getType(o) === schema;
-  if (Array.isArray(schema))
-    return (
-      Array.isArray(o) && o.every((item) => validate(item, schema[0], options))
-    );
+  const isArrayOfType = (value: any, type: string) =>
+    Array.isArray(value) && value.every(item => validate(item, type, options));
+
+  const parseType = (type: string) => {
+    const match = type.match(/^array<(.+)>$/);
+    return match ? { isArray: true, itemType: match[1] } : { isArray: false, itemType: type };
+  };
+
+  if (schema === "any") return true;
+
+  if (typeof schema === "string") {
+    const { isArray, itemType } = parseType(schema);
+    return isArray ? (itemType === "any" ? Array.isArray(o) : isArrayOfType(o, itemType)) : getType(o) === itemType;
+  }
+
+  if (Array.isArray(schema)) {
+    return Array.isArray(o) && o.every(item => validate(item, schema[0], options));
+  }
 
   const formatKeys = Object.keys(schema);
   const objectKeys = Object.keys(o);
 
-  if (!options.allowPartial && formatKeys.some((key) => !(key in o))) {
-    return false; // Missing required keys in non-partial mode
-  }
+  if (!options.allowPartial && formatKeys.some(key => !(key in o))) return false;
+  if (!options.allowExtend && objectKeys.some(key => !(key in schema))) return false;
 
-  if (!options.allowExtend && objectKeys.some((key) => !(key in schema))) {
-    return false; // Extra keys in non-extend mode
-  }
-
-  return formatKeys.every(
-    (key) => key in o && validate(o[key], schema[key], options)
-  );
+  return formatKeys.every(key => key in o && validate(o[key], schema[key], options));
 }
 
 export {
@@ -125,4 +127,3 @@ export {
   getFrom,
   validate
 };
-
