@@ -14,9 +14,9 @@ router.get("/:userId", useAuth, async (req: Request, res: Response) => {
     if (await isModerator(user.address)) {
       res.status(200).json(user);
     } else if (userId == user.address) {
-      res.status(200).json(clonePartial(user, { include: userPublicAttributes }));
+      res.status(200).json({ user: clonePartial(user, { include: userPublicAttributes })});
     } else {
-      res.status(200).json(clonePartial(user, { include: userPublicAttributes, exclude: ["settings"] }));
+      res.status(200).json({ user: clonePartial(user, { include: userPublicAttributes, exclude: ["settings"] })});
     }
   } catch (err) {
     console.error("Error fetching user:", err);
@@ -37,8 +37,8 @@ router.get("/*", useAuth, validateQuery(
     const users = await getTopicUsers(<string>topicId);
     res.status(200).json(
       await isModerator(user.address)
-        ? users
-        : users.map(u => clonePartial(u, { include: userPublicAttributes })));
+        ? { users }
+        : { users: users.map(u => clonePartial(u, { include: userPublicAttributes }))});
   } catch (err) {
     console.error("Error fetching users:", err);
     res.status(500).json({ error: "Internal server error" });

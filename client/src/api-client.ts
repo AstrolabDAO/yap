@@ -1,56 +1,89 @@
 import { Ref } from "vue";
 import { useWeb3Modal, useWeb3ModalAccount } from "@web3modal/ethers/vue";
 
-import { YAP_ENDPOINT } from "../../common/constants";
 import { Message, Proposal, Topic, User, Vote } from "../../common/models";
-import state from "./state";
-import { ethers } from "ethers";
+import { YAP_ENDPOINT } from "../../common/constants";
 import { Blocky } from "../../common/rendering";
+import state from "./state";
 
-async function login(o: { address: string }): Promise<User> {
+async function authFetch(url: string, options: RequestInit={}): Promise<Response> {
+  const headers = {
+    ...(options.headers ?? {}),
+    ...(state.jwt.value && { Authorization: `Bearer ${state.jwt.value}` }),
+    'Content-Type': 'application/json',
+  };
 
+  const res = await fetch(url, { ...options, headers });
+  const newJwt = res.headers.get('Authorization')?.split('Bearer ')[1];
+
+  if (newJwt) {
+    state.setJwt(newJwt);
+  }
+
+  return res;
+}
+
+async function login(): Promise<User|null> {
+
+  if (state.jwt.value) {
+    // try to login with jwt only
+    const { user } = await authFetch(`${YAP_ENDPOINT}/login`, { method: 'POST' })
+      .then((res) => res.json());
+    if (user) {
+      state.setUser(user);
+      return user;
+    }
+  }
+  // fallback to web3modal
   const { address, isConnected } = useWeb3ModalAccount();
-  let user = state.get("user", o.address);
+  if (!isConnected.value) {
+    await useWeb3Modal().open({ view: 'Connect' });
+  }
+
+  let user: Partial<User> = state.get("user", address.value!);
   if (!user) {
-    user = await fetch(`${YAP_ENDPOINT}/user/${o.address}`).then((res) => res.json());
+    user = (await authFetch(`${YAP_ENDPOINT}/user/${address.value}`).then((res) => res.json())).user;
     if (!user) {
       // throw new Error(`Failed to fetch user ${o.address}`);
+      user = {
+        address: address.value,
+        settings: state.loadSettings(),
+        blocky: new Blocky({ seed: address.value!, scale: 32, size: 7 }).getDataUrl()
+      };
     }
-    const blocky = new Blocky({ seed: address!, scale: 32, size: 7 });
-    
-    // state.upsert("user", user);
-  }
-  if (!isConnected.value) {
-    await useWeb3Modal().open();
   }
 
   try {
+    const message = `Login to our dApp: ${new Date().toISOString()}`;
+    const signature = await state.getSigner().then(s => s.signMessage(message));
+    const res = await authFetch(`${YAP_ENDPOINT}/login`, {
+      method: 'POST',
+      body: JSON.stringify({ signature, message, user }),
+    }).then(r => r.json());
 
-    // Create a Web3Provider using ethers v6
-    const provider = new ethers.BrowserProvider(window.ethereum)
-    const signer = await provider.getSigner()
-
-    // Create a unique message to sign
-    const message = `Login to our dApp: ${new Date().toISOString()}`
-
-    // Request signature from user
-    const signature = await signer.signMessage(message)
-
-    // Send the signature and message to the backend
-    const response = await axios.post('/login', { signature, message })
-    
-    // Handle the response
-    if (response.data.user) {
-      console.log('Logged in successfully', response.data.user)
-      // Store the JWT token from the Authorization header
-      const token = response.headers['authorization'].split(' ')[1]
-      localStorage.setItem('jwt_token', token)
-      // You might want to update your app's state here
+    if (!res.user) {
+      throw new Error(`Failed to login user ${address.value}`);
     }
+    console.log(`Logged in as ${res.user.name} (${res.user.address})`);
+    state.setUser(res.user);
+    return res.user;
   } catch (error) {
-    console.error('Login failed', error)
-    // Handle errors (e.g., user rejected signature request)
+    console.error('Login failed', error) // broken flow, eg. signature rejected by user or mismatch
+    return null;
   }
+}
+
+async function updateUser(): Promise<User> {
+  const { address } = useWeb3ModalAccount();
+  if (address.value !== state.user.value.address) { // state.get("user", address.value!)
+    throw new Error("Web3modal user address does not match state.user.address, no update allowed.");
+  }
+  const { user } = await authFetch(`${YAP_ENDPOINT}/user/${address.value}`, {
+    method: "PUT",
+    body: JSON.stringify(state.user.value),
+  }).then((res) => res.json());
+  state.upsert("user", user);
+  return user;
 }
 
 async function getMessages(o: { topicId?: string, userId?: string }): Promise<Ref<Message>[]> {
@@ -61,7 +94,7 @@ async function getMessages(o: { topicId?: string, userId?: string }): Promise<Re
   if (o.topicId) {
     let topic = state.get("topic", o.topicId);
     if (!topic) {
-      topic = await fetch(`${YAP_ENDPOINT}/topic/${o.topicId}`);
+      topic = (await authFetch(`${YAP_ENDPOINT}/topic/${o.topicId}`).then((res) => res.json())).topic;
       if (!topic) {
         throw new Error(`Failed to fetch topic ${o.topicId}`);
       }
@@ -69,13 +102,13 @@ async function getMessages(o: { topicId?: string, userId?: string }): Promise<Re
     }
     ids = topic.messageIds;
     if (ids.map((id: string) => state.get("message", id)).some((m: Ref<Message>) => !m)) {
-      const data = await fetch(`${YAP_ENDPOINT}/messages/*?topicId=${o.topicId}`).then((res) => res.json());
-      state.upsertAll("message", data);
+      const { messages } = await authFetch(`${YAP_ENDPOINT}/messages/*?topicId=${o.topicId}`).then((res) => res.json());
+      state.upsertAll("message", messages);
     }
   } else {
     let user = state.get("user", o.userId!);
     if (!user) {
-      user = await fetch(`${YAP_ENDPOINT}/user/${o.userId}`);
+      user = await authFetch(`${YAP_ENDPOINT}/user/${o.userId}`);
       if (!user) {
         throw new Error(`Failed to fetch user ${o.userId}`);
       }
@@ -83,13 +116,12 @@ async function getMessages(o: { topicId?: string, userId?: string }): Promise<Re
     }
     ids = user.messageIds;
     if (ids.map((id: string) => state.get("message", id)).some((m: Ref<Message>) => !m)) {
-      const data = await fetch(`${YAP_ENDPOINT}/messages/*?userId=${o.userId}`).then((res) => res.json());
+      const data = await authFetch(`${YAP_ENDPOINT}/messages/*?userId=${o.userId}`).then((res) => res.json());
       state.upsertAll("message", data);
     }
   }
   return state.getAll("message");
 }
-
 
 async function getVotes(o: { proposalId?: string, userId?: string }): Promise<Ref<Vote>[]> {
   if (!o.proposalId && !o.userId) {
@@ -98,7 +130,7 @@ async function getVotes(o: { proposalId?: string, userId?: string }): Promise<Re
   if (o.proposalId) {
     let proposal = state.get("proposal", o.proposalId);
     if (!proposal) {
-      proposal = await fetch(`${YAP_ENDPOINT}/proposal/${o.proposalId}`);
+      proposal = (await authFetch(`${YAP_ENDPOINT}/proposal/${o.proposalId}`).then((res) => res.json())).proposal;
       if (!proposal) {
         throw new Error(`Failed to fetch proposal ${o.proposalId}`);
       }
@@ -106,13 +138,13 @@ async function getVotes(o: { proposalId?: string, userId?: string }): Promise<Re
     }
 
     if (proposal.voteIds.map((id: string) => state.get("vote", id)).some((v: Ref<Vote>) => !v)) {
-      const data = await fetch(`${YAP_ENDPOINT}/votes/*?proposalId=${o.proposalId}`).then((res) => res.json());
-      state.upsertAll("vote", data);
+      const { votes } = await authFetch(`${YAP_ENDPOINT}/votes/*?proposalId=${o.proposalId}`).then((res) => res.json());
+      state.upsertAll("vote", votes);
     }
   } else {
     let user = state.get("user", o.userId!) as User;
     if (!user) {
-      user = await fetch(`${YAP_ENDPOINT}/user/${o.userId}`).then((res) => res.json());
+      user = (await fetch(`${YAP_ENDPOINT}/user/${o.userId}`).then((res) => res.json())).user;
       if (!user) {
         throw new Error(`Failed to fetch user ${o.userId}`);
       }
@@ -120,8 +152,8 @@ async function getVotes(o: { proposalId?: string, userId?: string }): Promise<Re
     }
 
     if (user.voteIds.map((id) => state.get("vote", id)).some((v: Ref<Vote>) => !v)) {
-      const data = await fetch(`${YAP_ENDPOINT}/votes/*?userId=${o.userId}`).then((res) => res.json());
-      state.upsertAll("vote", data);
+      const { votes } = (await authFetch(`${YAP_ENDPOINT}/votes/*?userId=${o.userId}`).then((res) => res.json())).votes;
+      state.upsertAll("vote", votes);
     }
   }
   return state.getAll("vote");
@@ -130,8 +162,8 @@ async function getVotes(o: { proposalId?: string, userId?: string }): Promise<Re
 async function getTopics(): Promise<Ref<Topic>[]> {
   let topics = state.getAll("topic");
   if (!topics) {
-    const data = await fetch(`${YAP_ENDPOINT}/topic/*`).then((res) => res.json());
-    state.upsertAll("topic", data);
+    const { topics } = await authFetch(`${YAP_ENDPOINT}/topic/*`).then((res) => res.json());
+    state.upsertAll("topic", topics);
   }
   return state.getAll("topic");
 }
@@ -139,10 +171,10 @@ async function getTopics(): Promise<Ref<Topic>[]> {
 async function getProposals(): Promise<Ref<Proposal>[]> {
   let proposals = state.getAll("proposal");
   if (!proposals) {
-    proposals = await fetch(`${YAP_ENDPOINT}/proposal/*`).then((res) => res.json());
+    proposals = (await authFetch(`${YAP_ENDPOINT}/proposal/*`).then((res) => res.json())).proposals;
     state.upsertAll("proposal", proposals);
   }
   return state.getAll("proposal");
 }
 
-export { getMessages, getVotes, getTopics, getProposals };
+export { getMessages, getVotes, getTopics, getProposals, updateUser, login };

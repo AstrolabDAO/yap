@@ -4,8 +4,8 @@ import express, { Request, Response } from "express";
 import { User } from "../../../common/models";
 import config from "../config";
 import { getNonce, getUser, pushNonce } from "../io";
-import { canLogin, generateJwt, revokeJwt } from "../security";
-import { createUserFromAddress, userPublicAttributes } from "../user";
+import { canLogin, generateJwt, revokeJwt, verifyAndRefreshJwt, verifyJwt } from "../security";
+import { createUser, userPublicAttributes } from "../user";
 import { clonePartial, shortenAddress } from "../../../common/utils";
 import { validateQuery } from "../middlewares/validation";
 
@@ -20,8 +20,20 @@ router.get("/login/nonce", validateQuery({ address: "string" }), async (req: Req
 
 router.post("/login", async (req: Request, res: Response) => {
   try {
-    const { signature, message } = req.body;
-
+    let { signature, message, user } = req.body;
+    if (res.hasHeader("Authorization")) {
+      const [jwt, payload] = verifyAndRefreshJwt(req.headers.authorization!);
+      if (payload) {
+        const user = await getUser(payload.address);
+        if (!user) {
+          console.error(`User not found: ${payload.address}, proceeding with new login...`);
+        } else {
+          return res.status(200).json({
+            user: clonePartial(user, { include: userPublicAttributes }),
+          });
+        }
+      }
+    }
     if (!signature || !message) {
       return res.status(400).json({ error: "Missing signature or message" });
     }
@@ -30,7 +42,7 @@ router.post("/login", async (req: Request, res: Response) => {
     if (!nonce || nonce !== message) {
       return res.status(403).json({ error: "Invalid nonce" });
     }
-    const user: User = await getUser(address) || await createUserFromAddress(address);
+    user = (await getUser(address) || await createUser(user)) as User;
     if (!canLogin(user)) {
       return res.status(403).json({ error: "Banned until " + new Date(user.moderation!.banned.until) });
     }

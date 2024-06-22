@@ -18,7 +18,7 @@ router.get("/:voteId", async (req: Request, res: Response) => {
     if (!vote) {
       return res.status(404).json({ error: "Vote not found." });
     }
-    res.status(200).json(vote);
+    res.status(200).json({ vote });
   } catch (error) {
     console.error("Error fetching vote:", error);
     res.status(500).json({ error: "Failed to fetch vote." });
@@ -39,7 +39,7 @@ router.get("/*", validateQuery(
     } else if (userId) {
       votes = await getUserVotes(<string>userId);
     }
-    res.status(200).json(votes);
+    res.status(200).json({ votes });
   } catch (error) {
     console.error("Error fetching votes:", error);
     res.status(500).json({ error: "Failed to fetch votes." });
@@ -89,7 +89,7 @@ router.get("/tally/:proposalId", isGov, async (req: Request, res: Response) => {
   const { proposalId } = req.params;
   try {
     const results = await tallyResults(proposalId);
-    res.status(200).json(results);
+    res.status(200).json({ results });
   } catch (error) {
     console.error("Error tallying votes:", error);
     res.status(500).json({ error: "Failed to tally votes" });

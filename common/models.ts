@@ -277,6 +277,8 @@ export {
   Proposal,
   Topic,
   JwtPayload,
+  UserSettings,
+  UserModeration,
   User,
   Network,
   Vote,

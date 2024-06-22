@@ -16,7 +16,7 @@ router.get("/:topicId", async (req: Request, res: Response) => {
     if (!topic) {
       return res.status(404).json({ error: "Topic not found." });
     }
-    res.status(200).json(topic);
+    res.status(200).json({ topic });
   } catch (error) {
     console.error("Error fetching topic:", error);
     res.status(500).json({ error: "Failed to fetch topic." });
@@ -26,7 +26,7 @@ router.get("/:topicId", async (req: Request, res: Response) => {
 router.get("/*", async (req: Request, res: Response) => {
   try {
     const topics = await getAllTopics();
-    res.status(200).json(topics);
+    res.status(200).json({ topics });
   } catch (error) {
     console.error("Error fetching topics:", error);
     res.status(500).json({ error: "Failed to fetch topics." });
@@ -61,7 +61,7 @@ router.post("/topic", useAuth, validateBody(
     }
     await pushTopic(topic);
     await pushToClients(topic, "create", "topic");
-    res.status(201).json(topic);
+    res.status(201).json({ topic });
   } catch (error) {
     console.error("Error creating topic:", error);
     res.status(500).json({ error: "Failed to create topic." });
@@ -87,7 +87,7 @@ router.put("/topic/:topicId", useAuth, validateBody(
     }
     await pushTopic(topic);
     await pushToClients(topic, "update", "topic");
-    res.status(200).json(topic);
+    res.status(200).json({ topic });
   } catch (error) {
     console.error("Error updating topic:", error);
     res.status(500).json({ error: "Failed to update topic." });

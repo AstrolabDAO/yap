@@ -24,7 +24,7 @@ router.get("/:proposalId", async (req: Request, res: Response) => {
     if (!proposal) {
       return res.status(404).json({ error: "Proposal not found." });
     }
-    res.status(200).json(proposal);
+    res.status(200).json({ proposal });
   } catch (error) {
     console.error("Error fetching proposal:", error);
     res.status(500).json({ error: "Failed to fetch proposal." });
@@ -34,7 +34,7 @@ router.get("/:proposalId", async (req: Request, res: Response) => {
 router.get("/*", async (req: Request, res: Response) => {
   try {
     const proposals = await getAllProposals();
-    res.status(200).json(proposals);
+    res.status(200).json({ proposals });
   } catch (error) {
     console.error("Error fetching proposals:", error);
     res.status(500).json({ error: "Failed to fetch proposals." });
@@ -129,7 +129,7 @@ router.post(
       };
       await pushProposal(proposal);
       await pushToClients(proposal, "create", "proposal");
-      res.status(201).json(proposal);
+      res.status(201).json({ proposal });
     } catch (error) {
       console.error("Error creating proposal:", error);
       res.status(500).json({ error: "Failed to create proposal." });
@@ -186,7 +186,7 @@ router.put(
       }
       await pushProposal(proposal);
       await pushToClients(proposal, "update", "proposal");
-      res.status(200).json(proposal);
+      res.status(200).json({ proposal });
     } catch (error) {
       console.error("Error updating proposal:", error);
       res.status(500).json({ error: "Failed to update proposal." });
@@ -254,7 +254,7 @@ router.put(
 
       await pushProposal(updatedProposal);
       await pushToClients(updatedProposal, "update", "proposal");
-      res.status(200).json(updatedProposal);
+      res.status(200).json({ proposal: updatedProposal });
     } catch (error) {
       console.error("Error changing proposal status:", error);
       res.status(500).json({ error: "Failed to change proposal status." });

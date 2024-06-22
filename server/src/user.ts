@@ -4,22 +4,28 @@ import { EligibilityCriteria, Role, User } from "../../common/models";
 import { getEligibility, getUser, grantRole, pushEligibilities, pushUser } from "./io";
 import { getProvider } from "./state";
 import config from "./config";
+import { DEFAULT_USER_SETTINGS } from "../../common/constants";
 
 const userPublicAttributes = ["ens", "name", "picture", "title", "joined", "proposalIds", "topics", "badges", "reputation", "settings"];
 
-async function createUserFromAddress(address: string): Promise<User> {
+async function createUser(user: Partial<User>): Promise<User> {
 
-  address = getAddress(address); // ensure checksum
-  const ens = await (await getProvider(1)).lookupAddress(address);
-  const prev = await getUser(address);
+  if (!user.address) {
+    throw new Error("User address is required");
+  }
+  user.address = getAddress(user.address); // ensure checksum
+  const prev = await getUser(user.address);
   if (prev) {
     throw new Error(`User already exists: ${JSON.stringify(prev)}`);
   }
-  const user: User = {
-    address: getAddress(address), // checksum
-    ens: ens || "",
-    name: ens?.replace(".eth", "") || "Anon",
-    title: "Citizen",
+  const ens = await (await getProvider(1)).lookupAddress(user.address) ?? "";
+  const name = user.name || ens?.replace(".eth", "") || "Anon";
+  const title = user.title || "Lurker";
+  user = <User>{
+    ...user,
+    ens,
+    name,
+    title,
     joined: Date.now(),
     picture: "",
     proposalIds: [],
@@ -34,23 +40,13 @@ async function createUserFromAddress(address: string): Promise<User> {
       banned: { since: 0, until: 0, by: "", count: 0 },
     },
     settings: {
-      theme: "dark",
-      locale: "en",
-      currency: "usd",
-      notifications: {
-        reputation: true,
-        proposals: true,
-        messages: false,
-        replies: true,
-        topics: true,
-        votes: false,
-      },
-      sessionRefresh: true,
+      ...DEFAULT_USER_SETTINGS,
+      ...(user.settings ?? {}),
     },
   };
-  await pushUser(user);
+  await pushUser(<User>user);
   console.log(`Created new user: ${JSON.stringify(user)}`);
-  return user;
+  return <User>user;
 }
 
 
@@ -66,7 +62,7 @@ async function initRoles() {
     const jobs = [];
     for (const address of addresses) {
       if (!await getUser(address)) {
-        jobs.push(createUserFromAddress(address).then((u) => grantRole(address, <Role>role)));
+        jobs.push(createUser({ address }).then((u) => grantRole(address, <Role>role)));
       }
     }
     await Promise.all(jobs);
@@ -85,4 +81,4 @@ async function initEligibility() {
       pushEligibilities(type, (<any>config.governance.eligibility)[type])));
 }
 
-export { userPublicAttributes, createUserFromAddress, initRoles, initEligibility };
+export { userPublicAttributes, createUser, initRoles, initEligibility };

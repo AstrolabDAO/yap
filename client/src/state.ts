@@ -1,15 +1,17 @@
-import { App, Ref, ref, watch } from "vue";
-import { Network, Resource, Theme, ThemeConfig, User } from "../../common/models";
-import { ASTROLAB_CDN } from "../../common/constants";
 import { Web3Modal } from "@web3modal/ethers";
-import { COLORS, THEMES } from "./constants";
+import { useWeb3ModalAccount, useWeb3ModalProvider } from "@web3modal/ethers/vue";
+import { BrowserProvider, JsonRpcSigner } from "ethers";
+import { App, Ref, ref, watch } from "vue";
+import { ASTROLAB_CDN, DEFAULT_USER_SETTINGS } from "../../common/constants";
+import { Network, Resource, Theme, User, UserSettings } from "../../common/models";
+import { COLORS } from "./constants";
 
 const networkById: Map<string | number, Network> = new Map();
 const usedChainIds = new Set<string|number>([]);
 
 let web3modal: Web3Modal = <any>{};
 const user: Ref<User> = ref(<User>{});
-const jwt = localStorage.getItem("jwt") || "";
+const jwt = ref(localStorage.getItem("jwt") || "");
 const theme: Ref<Theme> = ref(<Theme>localStorage.getItem("theme") || "dark");
 let app: App = <any>{};
 let socket: WebSocket = <any>{};
@@ -68,11 +70,24 @@ const delAll = (type: Resource) => {
 }
 
 const updateTheme = (t: Theme) => {
-  if (user.value) user.value.settings.theme = t;
-  localStorage.setItem("theme", t);
+  if (user.value) {
+    user.value.settings.theme = t;
+  }
+  localStorage.setItem(`userSettings:theme`, t);
+  fetch
   Object.entries(COLORS).forEach(([name, value]) => {
     document.documentElement.style.setProperty(`--${name}`, <string>value);
   });
+}
+
+const setJwt = (t: string) => {
+  localStorage.setItem('jwt', t);
+  jwt.value = t;
+}
+
+const setUser = (u: User) => {
+  user.value = u;
+  upsert("user", u);
 }
 
 watch(theme, (newTheme, prevTheme) => (newTheme !== prevTheme) ? updateTheme(newTheme) : null);
@@ -121,6 +136,39 @@ async function initNetworkProviders() {
   }
 }
 
+function loadSettings(): UserSettings {
+  const settings = <any>{};
+  for (const k of Object.keys(DEFAULT_USER_SETTINGS)) {
+    const v = localStorage.getItem(`userSettings:${k}`) ?? (<any>DEFAULT_USER_SETTINGS)[k];
+    settings[k] = v;
+  }
+  if (user.value) {
+    user.value.settings = settings;
+  }
+  updateTheme(settings.theme);
+  return settings;
+}
+
+function saveSettings(settings: UserSettings=user.value?.settings) {
+  for (const k of Object.keys(settings)) {
+    localStorage.setItem(`userSettings:${k}`, (<any>settings)[k] ?? (<any>DEFAULT_USER_SETTINGS)[k]);
+  }
+}
+
+async function getProvider(): Promise<BrowserProvider> {
+  const { walletProvider } = useWeb3ModalProvider();
+  return new BrowserProvider(walletProvider.value!);
+}
+
+async function getSigner(): Promise<JsonRpcSigner> {
+  return (await getProvider()).getSigner();
+}
+
+async function getAddress(): Promise<string> {
+  const { address } = useWeb3ModalAccount();
+  return address.value!;
+}
+
 export default {
   app,
   socket,
@@ -138,5 +186,12 @@ export default {
   init,
   networkById,
   usedChainIds,
-  initNetworkProviders
+  initNetworkProviders,
+  loadSettings,
+  saveSettings,
+  getProvider,
+  getSigner,
+  getAddress,
+  setJwt,
+  setUser,
 };

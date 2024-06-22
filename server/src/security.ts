@@ -36,7 +36,7 @@ function generateJwt(
 
 function verifyJwt(
   token: string,
-  salt = config.server.jwt_session_salt
+  salt: string = config.server.jwt_session_salt
 ): JwtPayload | null {
   try {
     if (!token) return null;
@@ -60,7 +60,7 @@ async function revokeJwt(token: string): Promise<void> {
 
 function verifyAndRefreshJwt(
   token: string,
-  salt: string,
+  salt: string = config.server.jwt_session_salt,
   grace: Interval = "m30",
   ttl: Interval = "h1"
 ): [string, JwtPayload] {

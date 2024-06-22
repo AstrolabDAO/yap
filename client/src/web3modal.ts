@@ -2,6 +2,7 @@ import { createWeb3Modal, defaultConfig } from "@web3modal/ethers/vue";
 import { ASTROLAB_CDN, W3M_PROJECTID } from "../../common/constants";
 import { clearNetworkTypeFromSlug } from "../../common/utils";
 import state from "./state";
+import { THEMES } from "./constants";
 
 const featuredWallets = {
   //metamask: "c57ca95b47569778a828d19178114f4db188b89b763c899ba0be274e97267d96",
@@ -83,12 +84,12 @@ export const setupWeb3Modal = async () => {
     ethersConfig,
     chainImages,
     featuredWalletIds: Object.values(featuredWallets),
-    themeMode: (state.user?.settings?.theme ?? "dark") as any,
+    themeMode: (state.user.value.settings?.theme ?? "dark") as any,
     themeVariables: {
-      "--w3m-accent": state.theme.primary,
+      "--w3m-accent": THEMES[state.theme.value].primary,
       // '--w3m-color-mix': State.theme.value!.bg[0],
       // '--w3m-color-mix-strength': 40,
-      "--w3m-font-family": state.theme.bodyFont,
+      "--w3m-font-family": THEMES[state.theme.value].bodyFont,
       "--w3m-font-size-master": ".5rem",
       "--w3m-border-radius-master": ".12rem",
     },
@@ -102,5 +103,5 @@ export const setupWeb3Modal = async () => {
   // );
   // state.web3Modal.subscribeEvents(event => { refreshData(); });
   // state.web3Modal.subscribeState(state => { refreshData(); });
-  return State.web3Modal;
+  return state.web3modal;
 };

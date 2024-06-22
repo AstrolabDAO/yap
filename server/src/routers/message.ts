@@ -16,7 +16,7 @@ router.get("/:messageId", async (req: Request, res: Response) => {
     if (!message) {
       return res.status(404).json({ error: "Message not found." });
     }
-    res.status(200).json(message);
+    res.status(200).json({ message });
   } catch (error) {
     console.error("Error fetching message:", error);
     res.status(500).json({ error: "Failed to fetch message." });
@@ -35,7 +35,7 @@ router.get("/*", async (req: Request, res: Response) => {
     if (!messages) {
       return res.status(404).json({ error: "Messages not found, please provide a valid topicId or userId." });
     }
-    res.status(200).json(messages);
+    res.status(200).json({ messages });
   } catch (error) {
     console.error("Error fetching topic:", error);
     res.status(500).json({ error: "Failed to fetch topic." });
@@ -66,7 +66,7 @@ router.post("/", useAuth, validateBody(
     };
     await pushMessage(message);
     await pushToClients(message, "create", "message");
-    res.status(201).json(message);
+    res.status(201).json({ message });
   } catch (error) {
     console.error("Error posting message:", error);
     res.status(500).json({ error: "Failed to post message." });
