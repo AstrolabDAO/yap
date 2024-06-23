@@ -8,4 +8,17 @@ export default defineConfig({
     vue(),
     pugPlugin()
   ],
+  resolve: {
+    alias: {
+      '@': '/src',
+      'react': 'preact/compat',
+      'react-dom': 'preact/compat',
+      'react/jsx-runtime': 'preact/jsx-runtime'
+    }
+  },
+  build: {
+    rollupOptions: {
+      external: ['react', 'react-dom']
+    }
+  }
 })

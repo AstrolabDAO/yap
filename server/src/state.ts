@@ -155,4 +155,4 @@ export {
   getMultiProvider,
   getProvider, getXToken, initNetworkProviders, pushToClients, usedChainIds, xTokenAliases
 };
-export default { server, app, wss };
+export default { server, app, wss, usedChainIds };

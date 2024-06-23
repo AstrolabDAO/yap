@@ -1,7 +1,12 @@
 import express, { Request, Response } from "express";
 import { getMessageCount, getProposalCount, getTopicCount, getUserCount, getVoteCount } from "../io";
+import { usedChainIds } from "../state";
 
 const router = express.Router();
+
+router.get("/chainIds", async (req: Request, res: Response) => {
+  res.status(200).json({ chainIds: Array.from(usedChainIds) });
+});
 
 router.get("/*", async (req: Request, res: Response) => {
   try {

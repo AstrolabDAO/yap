@@ -1,4 +1,4 @@
-import { Ref } from "vue";
+import { Ref, watch } from "vue";
 import { useWeb3Modal, useWeb3ModalAccount } from "@web3modal/ethers/vue";
 
 import { Message, Proposal, Topic, User, Vote } from "../../common/models";
