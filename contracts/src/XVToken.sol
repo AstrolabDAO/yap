@@ -3,19 +3,30 @@ pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/access/Ownable2Step.sol";
-import "@axelar-network/axelar-gmp-sdk-solidity/contracts/interfaces/IAxelarGateway.sol";
-import "@axelar-network/axelar-gmp-sdk-solidity/contracts/interfaces/IAxelarGasService.sol";
+import "@openzeppelin/contracts/utils/Strings.sol"; // import strings library
+import "@axelar-network/contracts/interfaces/IAxelarGateway.sol";
+import "@axelar-network/contracts/interfaces/IAxelarGasService.sol";
 
-contract VotingToken is ERC20, Ownable2Step {
+contract XVToken is ERC20, Ownable2Step {
+  using Strings for uint256;
+  using Strings for address;
+  using Strings for bytes32;
+
   IAxelarGateway public gateway; // axelar gateway interface
   IAxelarGasService public gasService; // axelar gas service interface
 
   uint256 public ownershipCooldown = 3 days; // cooldown period for ownership transfer
   uint256 public ownershipAcceptanceWindow = 2 days; // acceptance window for ownership transfer
 
-  mapping(bytes32 => uint256) public nonces; // nonce mapping for replay protection
+ mapping(bytes32 => mapping(address => uint256)) public nonces;
 
-  event CrossChainTransfer(address indexed from, bytes32 destinationChain, string destinationAddress, uint256 amount); // cross-chain transfer event
+  event CrossChainTransfer(
+    address indexed from,
+    bytes32 destinationChain,
+    address destinationAddress,
+    uint256 amount,
+    uint256 nonce
+  ); // cross-chain transfer event
   event OwnershipCooldownUpdated(uint256 newCooldown); // ownership cooldown updated event
   event OwnershipAcceptanceWindowUpdated(uint256 newAcceptanceWindow); // ownership acceptance window updated event
   event GasServiceUpdated(address newGasService); // gas service updated event
@@ -23,15 +34,24 @@ contract VotingToken is ERC20, Ownable2Step {
   event Mint(address indexed to, uint256 amount); // mint event
   event Burn(address indexed from, uint256 amount); // burn event
 
-  constructor(address _gateway, address _gasService) ERC20("Voting Token", "VOTE") {
+  constructor(
+    string memory _name,
+    string memory _symbol,
+    address _owner,
+    address _gateway,
+    address _gasService
+  ) ERC20(_name, _symbol) Ownable(_owner) {
     require(_gateway != address(0), "Gateway address cannot be zero");
-    require(_gasService != address(0), "Gas service address cannot be zero");
+    require(
+      _gasService != address(0),
+      "Gas service address cannot be zero"
+    );
 
     gateway = IAxelarGateway(_gateway);
     gasService = IAxelarGasService(_gasService);
   }
 
-  /** 
+  /**
    * @notice Mints new tokens to the specified address
    * @param to The address to mint tokens to
    * @param amount The amount of tokens to mint
@@ -56,60 +76,87 @@ contract VotingToken is ERC20, Ownable2Step {
   }
 
   // disable standard transferFrom
-  function transferFrom(address, address, uint256) public pure override returns (bool) {
+  function transferFrom(
+    address,
+    address,
+    uint256
+  ) public pure override returns (bool) {
     revert("Transfers are disabled");
   }
 
   /**
    * @notice Transfers tokens across chains by burning on source and minting on destination
    * @param destinationChain The destination chain name
-   * @param destinationAddress The address on the destination chain to receive the tokens
    * @param amount The amount of tokens to transfer
    */
   function crossChainTransfer(
     bytes32 destinationChain,
-    string memory destinationAddress,
     uint256 amount
   ) external payable {
-    require(destinationChain != bytes32(0), "Destination chain is required");
-    require(bytes(destinationAddress).length > 0, "Destination address is required");
+    require(
+      destinationChain != bytes32(0),
+      "Destination chain is required"
+    );
     require(amount > 0, "Amount must be greater than 0");
 
     _burn(msg.sender, amount);
+    uint256 nonce = nonces[destinationChain][msg.sender];
+    bytes memory payload = abi.encode(
+      msg.sender,
+      amount,
+      nonce
+    );
+    nonces[destinationChain][msg.sender]++;
 
-    bytes memory payload = abi.encode(msg.sender, amount, nonces[destinationChain]);
-    nonces[destinationChain]++;
+    string memory dstChainStr = string(
+      abi.encodePacked(destinationChain)
+    );
+    string memory dstAddrStr = address(this).toHexString();
 
     if (msg.value > 0) {
       gasService.payNativeGasForContractCall{value: msg.value}(
         address(this),
-        string(abi.encodePacked(destinationChain)),
-        destinationAddress,
+        dstChainStr,
+        dstAddrStr,
         payload,
         msg.sender
       );
     }
 
-    gateway.callContract(string(abi.encodePacked(destinationChain)), destinationAddress, payload);
+    gateway.callContract(
+      dstChainStr,
+      dstAddrStr,
+      payload
+    );
 
-    emit CrossChainTransfer(msg.sender, destinationChain, destinationAddress, amount); // emit cross-chain transfer event
+    emit CrossChainTransfer(
+      msg.sender,
+      destinationChain,
+      msg.sender,
+      amount,
+      nonce
+    ); // emit cross-chain transfer event
   }
 
   /**
    * @notice Executes the cross-chain transfer on the destination chain
    * @param sourceChain The source chain name
-   * @param sourceAddress The address on the source chain that initiated the transfer
    * @param payload The data payload containing the recipient address, amount, and nonce
    */
   function executeCrossChainTransfer(
     bytes32 sourceChain,
-    string memory sourceAddress,
     bytes calldata payload
   ) external {
-    require(msg.sender == address(gateway), "Only gateway can call this function");
+    require(
+      msg.sender == address(gateway),
+      "Only gateway can call this function"
+    );
 
-    (address recipient, uint256 amount, uint256 nonce) = abi.decode(payload, (address, uint256, uint256));
-    require(nonce == nonces[sourceChain]++, "Invalid nonce");
+    (address recipient, uint256 amount, uint256 nonce) = abi.decode( // recipient == sender
+      payload,
+      (address, uint256, uint256)
+    );
+    require(nonce == nonces[sourceChain][msg.sender]++, "Invalid nonce");
 
     _mint(recipient, amount);
   }
@@ -128,8 +175,13 @@ contract VotingToken is ERC20, Ownable2Step {
    * @notice Updates the ownership acceptance window period
    * @param newAcceptanceWindow The new acceptance window period in seconds
    */
-  function setOwnershipAcceptanceWindow(uint256 newAcceptanceWindow) external onlyOwner {
-    require(newAcceptanceWindow > 0, "Acceptance window must be greater than 0");
+  function setOwnershipAcceptanceWindow(
+    uint256 newAcceptanceWindow
+  ) external onlyOwner {
+    require(
+      newAcceptanceWindow > 0,
+      "Acceptance window must be greater than 0"
+    );
     ownershipAcceptanceWindow = newAcceptanceWindow;
     emit OwnershipAcceptanceWindowUpdated(newAcceptanceWindow); // emit ownership acceptance window updated event
   }
@@ -139,7 +191,10 @@ contract VotingToken is ERC20, Ownable2Step {
    * @param newGasService The new gas service address
    */
   function setGasService(address newGasService) external onlyOwner {
-    require(newGasService != address(0), "Gas service address cannot be zero");
+    require(
+      newGasService != address(0),
+      "Gas service address cannot be zero"
+    );
     gasService = IAxelarGasService(newGasService);
     emit GasServiceUpdated(newGasService); // emit gas service updated event
   }
@@ -154,25 +209,27 @@ contract VotingToken is ERC20, Ownable2Step {
     emit GatewayUpdated(newGateway); // emit gateway updated event
   }
 
+  uint256 public pendingOwnershipTimestamp;
+
   // override transferOwnership to include cooldown and acceptance window logic
   function transferOwnership(address newOwner) public override onlyOwner {
     super.transferOwnership(newOwner);
-    _initiateOwnershipTransfer(newOwner);
+    pendingOwnershipTimestamp = block.timestamp + ownershipCooldown;
   }
 
   /**
    * @notice Accepts the pending ownership transfer
    */
   function acceptOwnership() public override {
-    require(msg.sender == pendingOwner(), "Caller is not the pending owner");
-    require(block.timestamp >= pendingOwnershipTimestamp(), "Ownership transfer cooldown not met");
-    require(block.timestamp <= pendingOwnershipTimestamp() + ownershipAcceptanceWindow, "Ownership acceptance window expired");
-
-    _acceptOwnership();
-  }
-
-  function _initiateOwnershipTransfer(address newOwner) internal {
-    _setPendingOwner(newOwner);
-    _setPendingOwnershipTimestamp(block.timestamp + ownershipCooldown); // set ownership transfer timestamp
+    require(
+      block.timestamp >= pendingOwnershipTimestamp,
+      "Ownership transfer cooldown not met"
+    );
+    require(
+      block.timestamp <=
+        pendingOwnershipTimestamp + ownershipAcceptanceWindow,
+      "Ownership acceptance window expired"
+    );
+    super.acceptOwnership();
   }
 }
