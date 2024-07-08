@@ -5,10 +5,10 @@ h1.text-3xl Yap > Astrolab
 div
   span Open Topics: {{ stats.topics }}
   span Open Proposals: {{ stats.proposals }}
-template(v-if='state.isConnected.value')
+template(v-if='isConnected')
   button(@click="() => useWeb3Modal().open({ view: 'Account' })") test {{ shortAddress.value }}
 template(v-else)
-  button(@click="() => useWeb3Modal().open({ view: 'Connect' })") Connect
+  button(@click="() => login()") Connect
 
 .links
   a(href='https://twitter.com/project' target='_blank') Twitter
@@ -20,6 +20,7 @@ template(v-else)
 import { computed, ref } from 'vue';
 import { useWeb3Modal, useWeb3ModalAccount } from "@web3modal/ethers/vue";
 
+import { login } from '../api-client';
 import { shortenAddress } from '../../../common/utils';
 import state from '../state';
 

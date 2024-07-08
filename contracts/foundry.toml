@@ -4,5 +4,6 @@ out = "out"
 libs = ["lib"]
 remappings = [
   "forge-std=lib/forge-std",
-  "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/"
+  "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
+  "@axelar-network/contracts/=lib/axelar-network/axelar-gmp-sdk-solidity/contracts"
 ]

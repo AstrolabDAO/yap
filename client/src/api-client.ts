@@ -38,6 +38,7 @@ async function login(): Promise<User|null> {
   const { address, isConnected } = useWeb3ModalAccount();
   if (!isConnected.value) {
     await useWeb3Modal().open({ view: 'Connect' });
+    await new Promise((resolve) => watch(isConnected, (value) => value && resolve(void 0)));
   }
 
   let user: Partial<User> = state.get("user", address.value!);
@@ -54,11 +55,11 @@ async function login(): Promise<User|null> {
   }
 
   try {
-    const message = `Login to our dApp: ${new Date().toISOString()}`;
-    const signature = await state.getSigner().then(s => s.signMessage(message));
+    const nonce = await authFetch(`${YAP_ENDPOINT}/login/nonce?address=${address.value}`).then(r => r.json()).then(r => r.nonce);
+    const signature = await state.getSigner().then(s => s.signMessage(nonce));
     const res = await authFetch(`${YAP_ENDPOINT}/login`, {
       method: 'POST',
-      body: JSON.stringify({ signature, message, user }),
+      body: JSON.stringify({ signature, message: nonce, user }),
     }).then(r => r.json());
 
     if (!res.user) {
@@ -102,7 +103,7 @@ async function getMessages(o: { topicId?: string, userId?: string }): Promise<Re
     }
     ids = topic.messageIds;
     if (ids.map((id: string) => state.get("message", id)).some((m: Ref<Message>) => !m)) {
-      const { messages } = await authFetch(`${YAP_ENDPOINT}/messages/*?topicId=${o.topicId}`).then((res) => res.json());
+      const { messages } = await authFetch(`${YAP_ENDPOINT}/message/*?topicId=${o.topicId}`).then((res) => res.json());
       state.upsertAll("message", messages);
     }
   } else {
@@ -116,7 +117,7 @@ async function getMessages(o: { topicId?: string, userId?: string }): Promise<Re
     }
     ids = user.messageIds;
     if (ids.map((id: string) => state.get("message", id)).some((m: Ref<Message>) => !m)) {
-      const data = await authFetch(`${YAP_ENDPOINT}/messages/*?userId=${o.userId}`).then((res) => res.json());
+      const data = await authFetch(`${YAP_ENDPOINT}/message/*?userId=${o.userId}`).then((res) => res.json());
       state.upsertAll("message", data);
     }
   }
@@ -138,7 +139,7 @@ async function getVotes(o: { proposalId?: string, userId?: string }): Promise<Re
     }
 
     if (proposal.voteIds.map((id: string) => state.get("vote", id)).some((v: Ref<Vote>) => !v)) {
-      const { votes } = await authFetch(`${YAP_ENDPOINT}/votes/*?proposalId=${o.proposalId}`).then((res) => res.json());
+      const { votes } = await authFetch(`${YAP_ENDPOINT}/vote/*?proposalId=${o.proposalId}`).then((res) => res.json());
       state.upsertAll("vote", votes);
     }
   } else {
@@ -152,7 +153,7 @@ async function getVotes(o: { proposalId?: string, userId?: string }): Promise<Re
     }
 
     if (user.voteIds.map((id) => state.get("vote", id)).some((v: Ref<Vote>) => !v)) {
-      const { votes } = (await authFetch(`${YAP_ENDPOINT}/votes/*?userId=${o.userId}`).then((res) => res.json())).votes;
+      const { votes } = (await authFetch(`${YAP_ENDPOINT}/vote/*?userId=${o.userId}`).then((res) => res.json())).votes;
       state.upsertAll("vote", votes);
     }
   }

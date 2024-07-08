@@ -6,6 +6,7 @@
     "start": "bun index.ts"
   },
   "devDependencies": {
+    "@types/cors": "^2.8.17",
     "bun-types": "latest"
   },
   "peerDependencies": {

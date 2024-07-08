@@ -65,11 +65,11 @@ function verifyAndRefreshJwt(
   ttl: Interval = "h1"
 ): [string, JwtPayload] {
   const payload = verifyJwt(token);
-  if (!payload) {
-    throw new Error(`Invalid token: ${token}`);
+  if (!payload && token) {
+    console.error(`Invalid token: ${token}`);
   }
-  if (typeof payload.exp !== "number") {
-    throw new Error("Invalid token: missing or invalid expiration time");
+  if (typeof payload?.exp !== "number") {
+    return ["", <any>{}];
   }
   if (payload.exp * 1000 > Date.now() - toMs(grace)) {
     token = generateJwt(payload, salt, ttl);

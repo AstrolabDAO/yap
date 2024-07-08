@@ -1,3 +1,4 @@
+
 import cors from "cors";
 import express from "express";
 import http from "http";
@@ -14,6 +15,7 @@ import vote from "./src/routers/vote";
 import setupWs from "./src/routers/ws";
 import state, { initNetworkProviders } from "./src/state";
 import { initEligibility, initRoles } from "./src/user";
+import user from "./src/routers/user";
 
 async function init() {
   return Promise.all([
@@ -32,10 +34,11 @@ const start = async () => {
   setupWs(state.wss);
   state.app.use(cors())
     .use(express.json())
-    .use("/votes", vote)
-    .use("/messages", message)
-    .use("/topics", topic)
-    .use("/proposals", proposal)
+    .use("/user", user)
+    .use("/vote", vote)
+    .use("/message", message)
+    .use("/topic", topic)
+    .use("/proposal", proposal)
     .use("/moderation", moderation)
     .use("/stats", stats);
 

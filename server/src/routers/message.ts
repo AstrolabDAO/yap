@@ -2,7 +2,7 @@ import { Request, Response, Router } from "express";
 
 import { Message, User } from "../../../common/models";
 import { getMessage, getMessageDownvotes, getMessageUpvotes, getTopic, getTopicMessages, getUserMessages, pushMessage, pushMessageDownvote, pushMessageUpvote, removeMessage, removeMessageDownvote, removeMessageUpvote } from "../io";
-import { useAuth } from "../middlewares/auth";
+import { requireAuth, useAuth } from "../middlewares/auth";
 import { validateBody, validateParams } from "../middlewares/validation";
 import { cuffIfSpam } from "../mod";
 import { canEdit, canMessage } from "../security";
@@ -42,7 +42,7 @@ router.get("/*", async (req: Request, res: Response) => {
   }
 });
 
-router.post("/", useAuth, validateBody(
+router.post("/", requireAuth, validateBody(
   { "message": { "topicId": "string", "content": "string" } },
   { allowExtend: false, allowPartial: false }
 ), async (req: Request, res: Response) => {
